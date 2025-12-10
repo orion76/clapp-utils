@@ -3,48 +3,37 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 import { getProjectRoot, getUserProfileDirectory, isString, loadPackageJson } from '@orion76/clapp-utils';
-import { getLogger } from '../../../logger-init';
+
 import { IPluginDiscoveryConfig } from '../../../types';
 
 import { getStartDirectories } from './utils';
-
-const logger = getLogger('command_discovery');
 
 /**
  * Plugin discovery for commands
  * Loads command configurations from files and converts them to plugin definitions
  */
 export abstract class CommandPluginDiscoveryBase<D extends IPluginDefinition> extends PluginDiscoveryBase<D> {
-  abstract type: string;
+  protected abstract type: string;
+  protected abstract projects: string[];
+  protected abstract config: IPluginDiscoveryConfig;
+
   protected definitions: D[] = [];
 
-  constructor(
-    private projects: string[],
-    private config: IPluginDiscoveryConfig
-  ) {
-    super();
-    // Don't load definitions in constructor anymore
+  async getDefinitions(): Promise<D[]> {
+    if (!this.definitions) {
+      this.definitions = await this.findDefinitions();
+    }
+    return this.definitions;
   }
-
-  async initialize(): Promise<void> {
-    this.definitions = await this.findDefinitions();
-  }
-
   async findDefinitions(): Promise<D[]> {
     const definitionFiles = this.findDefinitionFileNames();
-    logger.log(['++ [CLAPP] commands\n', definitionFiles.join('\n')]);
 
-    // Load all definitions asynchronously
     const configPromises = definitionFiles.map((filePath) => this.loadCommandFromFile(filePath));
 
     const configs = await Promise.all(configPromises);
 
     function filterEmpty(config: D | null): config is D {
-      if (!config) {
-        logger.log('Failed to load some command definitions', 'error');
-        return false;
-      }
-      return true;
+      return !!config;
     }
 
     // Filter out null results
@@ -83,7 +72,7 @@ export abstract class CommandPluginDiscoveryBase<D extends IPluginDefinition> ex
     const searchDir = getUserProfileDirectory();
     const projects = [...this.projects, process.cwd()];
     const startDirectories = getStartDirectories(projects);
-    logger.log(['Find commands', { searchDir, startDirectories, projects }]);
+
     const { isAvailableProjectCheck } = this.config;
     const commandPaths = startDirectories
       .map((startDirectory) => getProjectRoot(startDirectory, searchDir))
@@ -94,13 +83,12 @@ export abstract class CommandPluginDiscoveryBase<D extends IPluginDefinition> ex
       .map((projectRoot) => {
         const commandPath = path.join(projectRoot, commandsDirectory);
         if (!fs.existsSync(commandPath)) {
-          logger.log(['Command path not found:' + commandPath], 'warn');
           return;
         }
         return commandPath;
       })
       .filter(isString);
-    logger.log(['COMMANDS', commandPaths]);
+
     return commandPaths;
   }
 

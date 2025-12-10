@@ -4,7 +4,7 @@
   "type": "module",
   "description": "TypeScript CLI library with Commander and plugin system",
   "license": "MIT",
-  "author": "Your Name <your.email@example.com>",
+  "author": "Paul Glazkow",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [
@@ -19,7 +19,7 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/orion76/clapp.git",
+    "url": "git+https://github.com/orion76/clapp.git",
     "directory": "packages/clapp"
   },
   "engines": {

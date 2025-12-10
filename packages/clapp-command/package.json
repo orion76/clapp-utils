@@ -4,7 +4,7 @@
   "type": "module",
   "description": "TypeScript types for CLI command plugins",
   "license": "MIT",
-  "author": "Your Name <your.email@example.com>",
+  "author": "Paul Glazkow",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [

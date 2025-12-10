@@ -16,4 +16,7 @@ export class PluginManager extends PluginManagerBase<IPluginContext> {
   ) {
     super();
   }
+  async getDefinitions(): Promise<IPluginContextDefinition[]> {
+    return this.pluginDiscovery.getDefinitions();
+  }
 }

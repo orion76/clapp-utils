@@ -16,6 +16,11 @@ export interface IPluginCommandDefinition<C = {}> extends IPluginDefinition {
 
 export interface IPluginCommand<C = {}, A = {}> extends IPlugin {
   definition: IPluginCommandDefinition<C>;
-  action(args: A): void;
+  action(args: A): ICommandResult | Promise<ICommandResult>;
   getArguments(args: string[], opts: Record<string, unknown>): A;
+}
+
+export interface ICommandResult {
+  success: boolean;
+  error?: string[];
 }
