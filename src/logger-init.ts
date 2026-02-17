@@ -1,6 +1,5 @@
-import { LoggerCollection } from './logger/collection';
-import { ILoggerConfig, UConsoleLevels } from './logger/types';
 
+import {ILoggerConfig,LoggerCollection,UConsoleLevels} from '@orion76/logger'
 
 type ULoggerNames = 'clapp_utils';
 const clappConfig: ILoggerConfig<ULoggerNames, UConsoleLevels>[] = [

@@ -1,50 +1,54 @@
 {
-  "name": "orion76",
-  "version": "1.0.0",
+  "name": "@clapp/utils",
+  "version": "0.0.4",
   "type": "module",
-  "description": "TypeScript CLI library monorepo with separate types and CLI packages",
+  "description": "TypeScript CLI library with Commander and plugin system",
   "license": "MIT",
-  "author": "Your Name <your.email@example.com>",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/your-username/clapp-monorepo.git"
-  },
-  "homepage": "https://github.com/your-username/clapp-monorepo#readme",
-  "bugs": {
-    "url": "https://github.com/your-username/clapp-monorepo/issues"
-  },
-  "workspaces": [
-    "packages/*"
-  ],
-  "scripts": {
-    "start": "tsx --tsconfig tsconfig.json ./src/app/index.ts",
-    "start:prod": "NODE_OPTIONS='--no-warnings' tsx --tsconfig tsconfig.json ./src/app/index.ts",
-    "build": "npm run build --workspace=packages/clapp-utils && npm run build --workspace=packages/clapp-command && npm run build --workspace=packages/clapp",
-    "build:command": "npm run build --workspace=packages/clapp-command",
-    "build:clapp": "npm run build --workspace=packages/clapp",
-    "i:cli": "npm i --workspace=packages/clapp",
-    "build:utils": "npm run build --workspace=packages/clapp-utils",
-    "clean": "npm run clean --workspace=packages/clapp-command && npm run clean --workspace=packages/clapp",
-    "clean:src": "./scripts/clean-src.sh",
-    "release": "npm run build && npm publish --workspace=packages/clapp-utils && npm publish --workspace=packages/clapp-command && npm publish --workspace=packages/clapp",
-    "test": "echo \"Error: no test specified\" && exit 1"
+  "author": "Paul Glazkow",
+  "exports": {
+    ".": {
+      "default": "./dist/clapp-utils.js",
+      "types": "./dist/clapp-utils.d.ts"
+    }
   },
   "keywords": [
     "cli",
     "typescript",
     "commander",
     "plugin-system",
-    "library",
-    "nodejs",
-    "monorepo"
+    "library"
   ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/orion76/clapp.git",
+    "directory": "packages/clapp-utils"
+  },
   "engines": {
     "node": ">=14.0.0"
   },
+  "scripts": {
+    "build": "npm run clean && rollup -c",
+    "clean": "rm -rf dist",
+    "pack": "npm pack",
+    "prepublishOnly": "npm run build",
+    "test": "echo tests for clapp utils!",
+    "test:jest": "jest",
+    "install-libs": "./scripts/install.sh"
+  },
+  "peerDependencies": {
+    "@orion76/plugin": "^0.1.19",
+    "@orion76/logger": "^0.0.2"
+  },
   "devDependencies": {
-    "@changesets/cli": "^2.29.7",
+    "@rollup/plugin-node-resolve": "^16.0.3",
+    "@rollup/plugin-typescript": "^12.3.0",
+    "@types/jest": "^30.0.0",
     "@types/node": "^24.10.1",
-    "tsx": "^4.20.6",
+    "jest": "^30.2.0",
+    "rollup": "^4.57.0",
+    "rollup-plugin-dts": "^6.3.0",
+    "rollup-plugin-generate-package-json": "^3.2.0",
+    "ts-jest": "^29.4.5",
     "typescript": "^5.9.3"
   }
 }
