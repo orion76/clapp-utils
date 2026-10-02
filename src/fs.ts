@@ -19,21 +19,15 @@ export function isProjectRoot(dir: string): boolean {
   return fs.existsSync(path.join(dir, 'package.json'));
 }
 
-export function getProjectRoot(startFromDir: string, searchInDir = getUserProfileDirectory()) {
-  const projectRoot = findProjectRoot(searchInDir, startFromDir, isProjectRoot);
-  if (!projectRoot) {
-    throw new Error(`Project root not found. \nSearch in: ${searchInDir}\n Search start: ${startFromDir}`);
-  }
-  return projectRoot;
+export function getProjectRoot(startFromDir: string, searchInDir = getUserProfileDirectory()): string | null {
+  return findProjectRoot(startFromDir, searchInDir, isProjectRoot);
 }
 
 export function findProjectRoot(
-  searchInDir: string,
   startFromDir: string,
-  checkFn: (dir: string) => boolean
+  searchInDir: string,
+  checkFn: (dir: string) => boolean,
 ): string | null {
-  // Use realpath to resolve symlinks consistently, with fallback for broken symlinks
-
   let currentDir: string = startFromDir;
 
   if (!currentDir.startsWith(searchInDir)) {
@@ -45,11 +39,9 @@ export function findProjectRoot(
       return currentDir;
     }
 
-    // Move up one directory
     currentDir = path.dirname(currentDir);
   }
 
-  // Check the search directory itself as the last step
   if (currentDir === searchInDir && checkFn(currentDir)) {
     return currentDir;
   }
@@ -57,7 +49,6 @@ export function findProjectRoot(
   return null;
 }
 export function isFileInside(file: string, parentDir: string): boolean {
-  // console.log("------", file, { file, parentDir });
   if (!fs.statSync(parentDir).isDirectory()) {
     return false;
   }
