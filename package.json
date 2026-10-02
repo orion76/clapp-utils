@@ -36,7 +36,7 @@
     "install-libs": "./scripts/install.sh"
   },
   "peerDependencies": {
-    "@orion76/plugin": "^0.2.2",
+    "@orion76/plugin": "^0.2.3",
     "@orion76/logger": "^0.0.2"
   },
   "devDependencies": {
