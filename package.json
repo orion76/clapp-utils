@@ -24,7 +24,7 @@
     "directory": "packages/clapp-utils"
   },
   "engines": {
-    "node": ">=14.0.0"
+    "node": ">=22.0.0"
   },
   "scripts": {
     "build": "npm run clean && rollup -c",
