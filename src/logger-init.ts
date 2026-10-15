@@ -2,15 +2,15 @@
 import {ILoggerConfig,LoggerCollection,UConsoleLevels} from '@orion76/logger'
 
 type ULoggerNames = 'clapp_utils';
-const clappConfig: ILoggerConfig<ULoggerNames, UConsoleLevels>[] = [
+const clappConfig: ILoggerConfig<UConsoleLevels>[] = [
   {
-    name: 'clapp_utils',
+
     enabled: false,
     levels: ['log', 'debug', 'error', 'info', 'warn'],
     enabledLevels: ['log', 'debug', 'error', 'info', 'warn'],
   },
 ];
-const loggerCollections = new LoggerCollection<ULoggerNames, UConsoleLevels>(clappConfig);
+const loggerCollections = new LoggerCollection<ULoggerNames, UConsoleLevels>();
 
 export function getLogger(name: ULoggerNames) {
   return loggerCollections.get(name);
