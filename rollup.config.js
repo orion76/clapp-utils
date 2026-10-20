@@ -29,7 +29,7 @@ export default [
         exclude: ['node_modules/**']
       }),
     ],
-    external: ['jsonc-parser', 'yaml', 'asty-astq', 'pegjs-otf', 'pegjs-util']
+    external: ['jsonc-parser', 'yaml']
   },
   // TypeScript definitions bundle
   {

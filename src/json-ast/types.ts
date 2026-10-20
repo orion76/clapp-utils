@@ -1,87 +1,91 @@
-/*!
-**  JSON-ASTy -- Lossless JSON-to-AST Parser and AST-to-JSON Generator
-**  Ported from json-asty 1.3.4, src/json-asty.d.ts
-**  Copyright (c) 2018-2026 Dr. Ralf S. Engelschall <rse@engelschall.com>
-**
-**  Permission is hereby granted, free of charge, to any person obtaining
-**  a copy of this software and associated documentation files (the
-**  "Software"), to deal in the Software without restriction, including
-**  without limitation the rights to use, copy, modify, merge, publish,
-**  distribute, sublicense, and/or sell copies of the Software, and to
-**  permit persons to whom the Software is furnished to do so, subject to
-**  the following conditions:
-**
-**  The above copyright notice and this permission notice shall be included
-**  in all copies or substantial portions of the Software.
-**
-**  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
-**  EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
-**  MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
-**  IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
-**  CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
-**  TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
-**  SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-*/
+/**
+ * Types of the lossless JSON AST produced by `JsonAst.parse`.
+ *
+ * The lossless attribute model (`prolog`/`body`/`epilog`/`value`) is inspired by
+ * json-asty 1.3.4 (https://github.com/rse/json-asty, MIT, Copyright (c) 2018-2026
+ * Dr. Ralf S. Engelschall). This module and the node implementation in `./node.ts`
+ * are an independent implementation: no code of that library is used.
+ */
 
 /**
  * Position of an AST node inside the parsed JSON text.
  *
- * Lines and columns are 1-based, the offset is 0-based — exactly as reported by the
- * underlying `asty-astq` node position.
+ * Lines and columns are 1-based, the offset is 0-based. The column is counted from
+ * the beginning of the line, the offset from the beginning of the document.
  */
 export interface AstNodePos {
+  /** 1-based line number. */
   line: number;
+  /** 1-based column number. */
   column: number;
+  /** 0-based character offset. */
   offset: number;
 }
+
+/** Type of a node of the lossless JSON AST. */
+export type JsonAstNodeType = 'object' | 'member' | 'array' | 'string' | 'number' | 'boolean' | 'null';
+
+/** Traversal phase of a node reported to a `JsonAstNode.walk` callback. */
+export type JsonAstWalkWhen = 'downward' | 'upward';
+
+/** Traversal direction requested from `JsonAstNode.walk`. */
+export type JsonAstWalkDirection = JsonAstWalkWhen | 'both';
+
+/**
+ * Callback of `JsonAstNode.walk`.
+ *
+ * @param node - visited node
+ * @param depth - depth of the node relative to the node `walk` was called on (0-based)
+ * @param parent - parent of the visited node, `null` for the root
+ * @param when - traversal phase: `downward` before the children, `upward` after them
+ */
+export type JsonAstWalkCallback = (
+  node: JsonAstNode,
+  depth: number,
+  parent: JsonAstNode | null,
+  when: JsonAstWalkWhen,
+) => void;
 
 /**
  * A node of the lossless JSON AST.
  *
- * Nodes are created by `JsonAst.parse` and carry the raw JSON text in their
- * attributes: `prolog` (opening bracket plus surrounding whitespace), `body` (raw
- * literal or quoted string text), `epilog` (separator plus whitespace, or closing
- * bracket plus whitespace) and `value` (the typed JavaScript value). The methods below
- * are the subset of the `asty-astq` node API the port relies on and that is useful to
- * consumers; it is not a complete replacement for that library.
+ * Nodes keep the raw text of the parsed document in their attributes, so unparsing an
+ * AST reproduces the source text byte for byte:
+ *
+ * - `prolog` — raw text before the node content (opening bracket plus whitespace);
+ * - `body` — raw text of a literal or a quoted string, quotes included;
+ * - `epilog` — raw text after the node content (separator or closing bracket plus
+ *   whitespace);
+ * - `value` — the decoded JavaScript value of the node.
+ *
+ * The attribute set is intentionally open: consumers may read attributes through
+ * `get`/`attrs` and set them through `set`. The methods below are the only ones the
+ * module promises; it has no AST editing helpers and never writes to the output.
  */
 export interface JsonAstNode {
   /** Get the node type (`object`, `member`, `array`, `string`, `number`, `boolean`, `null`). */
   type(): string;
-  /** Set the node type. */
-  type(type: string): JsonAstNode;
 
   /** Get the names of all attributes of the node. */
   attrs(): string[];
+
   /** Get the value of one attribute (`undefined` when absent). */
   get(name: string): unknown;
-  /** Get the values of several attributes, in the requested order. */
-  get(names: string[]): unknown[];
+
   /** Set one attribute; `undefined` removes it. */
   set(name: string, value: unknown): JsonAstNode;
-  /** Set several attributes at once; `undefined` values remove them. */
-  set(attrs: Record<string, unknown>): JsonAstNode;
 
   /** Get the position of the node in the source text. */
   pos(): AstNodePos;
-  /** Set the position of the node in the source text. */
-  pos(line: number, column: number, offset: number): JsonAstNode;
-
-  /** Create a new node of the given type; it starts out without a parent. */
-  create(type: string): JsonAstNode;
-  /** Append child nodes (or arrays of child nodes) to the node. */
-  add(...childs: (JsonAstNode | JsonAstNode[])[]): JsonAstNode;
-  /** Insert child nodes (or arrays of child nodes) at the given position. */
-  ins(pos: number, ...childs: (JsonAstNode | JsonAstNode[])[]): JsonAstNode;
-  /** Remove child nodes from the node. */
-  del(...childs: JsonAstNode[]): JsonAstNode;
-  /** Get one child node by position, `null` when out of range. */
-  child(pos: number): JsonAstNode | null;
-  /** Get all child nodes, or the range `[begin, end)` / `[begin, ...]` of them. */
-  childs(begin?: number, end?: number): JsonAstNode[];
 
   /** Get the parent node, `null` for the root node. */
   parent(): JsonAstNode | null;
+
+  /** Get one child node by position, `null` when out of range. */
+  child(pos: number): JsonAstNode | null;
+
+  /** Get all child nodes, or the range `[begin, end)` of them. */
+  childs(begin?: number, end?: number): JsonAstNode[];
 
   /**
    * Traverse the subtree starting at this node in depth-first order.
@@ -89,11 +93,5 @@ export interface JsonAstNode {
    * `when` selects which callback phases run: `downward` before the children of a node,
    * `upward` after them, `both` for the two of them.
    */
-  walk(
-    callback: (node: JsonAstNode, depth: number, parent: JsonAstNode | null, when: 'downward' | 'upward') => void,
-    when?: 'downward' | 'upward' | 'both',
-  ): JsonAstNode;
-
-  /** Run an ASTq query against the subtree of the node. */
-  query(selector: string, params?: Record<string, unknown>, trace?: boolean): JsonAstNode[];
+  walk(callback: JsonAstWalkCallback, when?: JsonAstWalkDirection): JsonAstNode;
 }
