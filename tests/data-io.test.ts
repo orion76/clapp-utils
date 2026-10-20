@@ -1,5 +1,4 @@
-import { readValue, writeValue, addValue, detectFileFormat, DataAccessError } from '../src/data-io';
-import { parsePath } from '../src/data-path';
+import { readValue, writeValue, addValue, detectFileFormat, DataAccessError, parsePath } from '../data-file';
 import fs from 'fs';
 import path from 'path';
 

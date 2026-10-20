@@ -1,7 +1,3 @@
-export * from './data-io';
-export * from './data-json';
-export * from './data-path';
-export * from './data-yaml';
 export * from './fs';
 export * from './parse-arg';
 export * from './project';

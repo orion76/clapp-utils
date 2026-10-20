@@ -1,4 +1,4 @@
-import { parsePath, escapePath, DataPathError } from '../src/data-path';
+import { parsePath, escapePath, DataPathError } from '../data-file';
 
 describe('data-path', () => {
   describe('parsePath', () => {

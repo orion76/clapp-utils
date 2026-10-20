@@ -1,4 +1,4 @@
-import { getJsonValue, setJsonValue, addJsonValue } from '../src/data-json';
+import { getJsonValue, setJsonValue, addJsonValue } from '../data-file';
 
 const testJson = `{
   // This is a comment
