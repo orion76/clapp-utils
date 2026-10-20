@@ -6,7 +6,7 @@
  * while unmodified parts of the document round-trip through the stringifier.
  */
 import { isMap, isScalar, isSeq, parseDocument, type Document, type Node } from 'yaml';
-import { DataPathError, parsePath, type DataPath, type DataPathInput, type PathSegment } from './data-path';
+import { DataPathError, parsePath, type DataPath, type DataPathInput, type PathSegment } from './path';
 
 export class YamlDataError extends Error {
   constructor(message: string) {

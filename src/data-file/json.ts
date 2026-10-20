@@ -16,7 +16,7 @@ import {
   type DataPath,
   type DataPathInput,
   type PathSegment,
-} from './data-path';
+} from './path';
 
 /**
  * JSON-compatible value as returned by `getJsonValue`.

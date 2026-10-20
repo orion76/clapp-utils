@@ -7,9 +7,9 @@
  */
 import fs from 'fs';
 import path from 'path';
-import { addJsonValue, getJsonValue, setJsonValue } from './data-json';
-import { parsePath, escapePath, type DataPathInput } from './data-path';
-import { addYamlValue, getYamlValue, setYamlValue } from './data-yaml';
+import { addJsonValue, getJsonValue, setJsonValue } from './json';
+import { parsePath, escapePath, type DataPathInput } from './path';
+import { addYamlValue, getYamlValue, setYamlValue } from './yaml';
 
 /**
  * Supported data file formats, selected by the file extension.
