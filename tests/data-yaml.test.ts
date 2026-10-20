@@ -1,4 +1,4 @@
-import { getYamlValue, setYamlValue, addYamlValue } from '../data-file';
+import { getYamlValue, setYamlValue, addYamlValue } from '../src/data-file';
 
 const testYaml = `# Main config
 name: test

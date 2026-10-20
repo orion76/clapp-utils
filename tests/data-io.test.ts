@@ -1,4 +1,4 @@
-import { readValue, writeValue, addValue, detectFileFormat, DataAccessError, parsePath } from '../data-file';
+import { readValue, writeValue, addValue, detectFileFormat, DataAccessError, parsePath } from '../src/data-file';
 import fs from 'fs';
 import path from 'path';
 
