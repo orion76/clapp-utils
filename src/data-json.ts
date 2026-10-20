@@ -200,7 +200,7 @@ function findInsertionPoint(root: Node, segments: PathSegment[], path: DataPathI
           `Array index "${segment}" used against an object at path "${pathToString(path)}"`,
         );
       }
-      const prop = (node.children ?? []).find((candidate: Node) => candidate.children?.[0]?.value === segment);
+      const prop: Node | undefined = (node.children ?? []).find((candidate: Node) => candidate.children?.[0]?.value === segment);
       if (!prop) {
         return { found: false, parent: node, segment, remaining: segments.slice(i + 1) };
       }
