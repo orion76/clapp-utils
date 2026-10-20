@@ -8,117 +8,57 @@
  * Value handling follows the JSON grammar: strings, numbers, booleans, `null`,
  * arrays and objects. `undefined` is not a JSON value and is rejected.
  */
-import { applyEdits, parseTree, type Edit, type Node, type ParseError } from 'jsonc-parser';
-import {
-  DataPathError,
-  escapePath,
-  parsePath,
-  type DataPath,
-  type DataPathInput,
-  type PathSegment,
-} from './path';
+import { applyEdits, type Edit, type Node } from 'jsonc-parser';
+import { JsonDataError } from '../../errors';
+import { escapePath } from '../../path';
+import { TDataPath, TPathSegment, UInsertionPoint } from '../../types';
+import { FileBase } from '../file.base';
+import { IFileFormat } from '../types';
+import { findValueNode, nodeValue, parseTreeOrThrow } from './lib';
 
-/**
- * JSON-compatible value as returned by `getJsonValue`.
- */
-export type JsonValue = string | number | boolean | null | JsonObject | JsonArray;
-export interface JsonObject {
-  [key: string]: JsonValue | undefined;
-}
-export interface JsonArray extends Array<JsonValue> {}
 
-export interface SetJsonValueOptions {
-  /**
-   * When `true`, an already existing value at the path is left untouched
-   * (never overwritten); only missing keys/array slots are created.
-   */
-  insert?: boolean;
-}
-
-export class JsonDataError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = 'JsonDataError';
-  }
-}
-
-function toSegments(path: DataPathInput): PathSegment[] {
-  if (typeof path === 'string') {
-    return parsePath(path);
-  }
-  if (path.length === 0) {
-    throw new DataPathError('Path is empty');
-  }
-  return Array.from(path);
-}
-
-function nodeValue(node: Node): unknown {
-  switch (node.type) {
-    case 'array':
-      return (node.children ?? []).map((child: Node) => nodeValue(child));
-    case 'object': {
-      const result: Record<string, unknown> = {};
-      for (const prop of node.children ?? []) {
-        const keyNode = prop.children?.[0];
-        const valueNode = prop.children?.[1];
-        if (keyNode && typeof keyNode.value === 'string') {
-          result[keyNode.value] = valueNode ? nodeValue(valueNode) : undefined;
-        }
+export class JsonFile extends FileBase implements IFileFormat {
+  private nodeRoot!: Node;
+  private getRoot() {
+    if (!this.nodeRoot) {
+      const nodeRoot = parseTreeOrThrow(this.fileContent);
+      if (!nodeRoot) {
+        throw new Error(`File content not parsed`);
       }
-      return result;
+      this.nodeRoot = nodeRoot;
     }
-    default:
-      return node.value;
+    return this.nodeRoot;
   }
-}
 
-/**
- * Read a value located by `path` from a JSON/JSONC document.
- *
- * @param fileContent - raw file content (JSON or JSONC)
- * @param path - data path
- * @returns the value at the path, or `undefined` when the path does not exist
- * @throws {JsonDataError} when the content is not valid JSON/JSONC
- */
-export function getJsonValue(fileContent: string, path: DataPathInput): unknown {
-  const node = findValueNode(fileContent, path);
-  return node ? nodeValue(node) : undefined;
-}
+  async getValue<T extends unknown = unknown>(dataPath: TDataPath): Promise<T | undefined> {
+    const node = findValueNode(this.getRoot(), dataPath);
+    const value = node ? nodeValue<T>(node) : undefined;
+    return Promise.resolve(value);
+  }
 
-function findValueNode(fileContent: string, path: DataPathInput): Node | undefined {
-  const segments = toSegments(path);
-  const root = parseTreeOrThrow(fileContent);
-  if (!root) {
-    return undefined;
-  }
-  let node: Node | undefined = root;
-  for (const segment of segments) {
-    if (!node) {
-      return undefined;
-    }
-    node = childNode(node, segment);
-  }
-  return node;
-}
+  async setValue<T>(dataPath: TDataPath, value: T): Promise<boolean> {
+    const root = this.getRoot();
 
-function childNode(node: Node, segment: PathSegment): Node | undefined {
-  if (node.type === 'object') {
-    if (typeof segment !== 'string') {
-      // A numeric segment against an object is not an existing composite path.
-      return undefined;
+    // Empty file → build a whole new document.
+    // if (!root) {
+    //   const nested = buildNestedValue(dataPath, value);
+    //   return serializeRoot(nested);
+    // }
+
+    const point = findInsertionPoint(root, dataPath);
+    if (point.found) {
+
+      const edit = replaceValueEdit(this.fileContent, point.node, value);
+      applyEdits(this.fileContent, [edit]);
+      return Promise.resolve(true);
     }
-    const prop = (node.children ?? []).find((candidate: Node) => candidate.children?.[0]?.value === segment);
-    return prop ? (prop.children?.[1] ?? undefined) : undefined;
+
+    const nestedValue = buildNestedValue(point.remaining, value);
+    const edit = insertValueEdit(this.fileContent, point.parent, point.segment, nestedValue);
+    applyEdits(this.fileContent, [edit]);
+
+    return Promise.resolve(true);
   }
-  if (node.type === 'array') {
-    if (typeof segment !== 'number') {
-      // A key segment against an array is not an existing composite path.
-      return undefined;
-    }
-    return (node.children ?? [])[segment] ?? undefined;
-  }
-  // A scalar value is not a container; the rest of the path does not exist.
-  return undefined;
 }
 
 /**
@@ -134,26 +74,18 @@ function childNode(node: Node, segment: PathSegment): Node | undefined {
  * path crosses a scalar value (or a type mismatch), or the value is not
  * JSON-compatible
  */
-export function setJsonValue(
-  fileContent: string,
-  path: DataPathInput,
-  value: unknown,
-  options: SetJsonValueOptions = {},
-): string {
-  const segments = toSegments(path);
+export function setJsonValue(fileContent: string, dataPath: TDataPath, value: unknown): string {
   const root = parseTreeOrThrow(fileContent);
 
   // Empty file → build a whole new document.
   if (!root) {
-    const nested = buildNestedValue(segments, value);
+    const nested = buildNestedValue(dataPath, value);
     return serializeRoot(nested);
   }
 
-  const point = findInsertionPoint(root, segments, path);
+  const point = findInsertionPoint(root, dataPath);
   if (point.found) {
-    if (options.insert) {
-      return fileContent; // do not overwrite
-    }
+
     const edit = replaceValueEdit(fileContent, point.node, value);
     return applyEdits(fileContent, [edit]);
   }
@@ -168,66 +100,43 @@ export function setJsonValue(
  * overwriting an existing value. Convenience wrapper over
  * {@link setJsonValue} with `insert: true`.
  */
-export function addJsonValue(fileContent: string, path: DataPathInput, value: unknown): string {
+export function addJsonValue(fileContent: string, path: TDataPath, value: unknown): string {
   return setJsonValue(fileContent, path, value, { insert: true });
 }
 
-function parseTreeOrThrow(fileContent: string): Node | undefined {
-  const errors: ParseError[] = [];
-  const root = parseTree(fileContent, errors, { allowTrailingComma: true });
-  if (errors.length > 0) {
-    const error = errors[0];
-    const snippet = fileContent.slice(error.offset, error.offset + error.length) || '<eof>';
-    throw new JsonDataError(`Invalid JSON/JSONC content at offset ${error.offset}: ${JSON.stringify(snippet)}`);
-  }
-  return root;
-}
-
-type InsertionPoint =
-  | { found: true; node: Node }
-  | { found: false; parent: Node; segment: PathSegment; remaining: PathSegment[] };
-
-function findInsertionPoint(root: Node, segments: PathSegment[], path: DataPathInput): InsertionPoint {
+function findInsertionPoint(root: Node, dataPath: TDataPath): UInsertionPoint {
   let node: Node | undefined = root;
-  for (let i = 0; i < segments.length; i++) {
-    const segment = segments[i];
+  for (let i = 0; i < dataPath.length; i++) {
+    const segment = dataPath[i];
     if (!node) {
-      throw new JsonDataError(`Value at path "${pathToString(path)}" is not a container`);
+      throw new JsonDataError(`Value at path "${pathToString(dataPath)}" is not a container`);
     }
     if (node.type === 'object') {
       if (typeof segment !== 'string') {
-        throw new JsonDataError(
-          `Array index "${segment}" used against an object at path "${pathToString(path)}"`,
-        );
+        throw new JsonDataError(`Array index "${segment}" used against an object at path "${pathToString(dataPath)}"`);
       }
       const prop: Node | undefined = (node.children ?? []).find((candidate: Node) => candidate.children?.[0]?.value === segment);
       if (!prop) {
-        return { found: false, parent: node, segment, remaining: segments.slice(i + 1) };
+        return { found: false, parent: node, segment, remaining: dataPath.slice(i + 1) };
       }
       node = prop.children?.[1] ?? undefined;
       continue;
     }
     if (node.type === 'array') {
       if (typeof segment !== 'number') {
-        throw new JsonDataError(
-          `Object key "${segment}" used against an array at path "${pathToString(path)}"`,
-        );
+        throw new JsonDataError(`Object key "${segment}" used against an array at path "${pathToString(dataPath)}"`);
       }
       const child = (node.children ?? [])[segment];
       if (child === undefined) {
-        return { found: false, parent: node, segment, remaining: segments.slice(i + 1) };
+        return { found: false, parent: node, segment, remaining: dataPath.slice(i + 1) };
       }
       node = child;
       continue;
     }
     // Scalar value in the middle of the path.
-    throw new JsonDataError(
-      `Value at path "${pathToString(path)}" is a ${node.type}, cannot descend into "${segment}"`,
-    );
+    throw new JsonDataError(`Value at path "${pathToString(dataPath)}" is a ${node.type}, cannot descend into "${segment}"`);
   }
-  return node
-    ? { found: true, node }
-    : { found: false, parent: root, segment: segments[0], remaining: segments.slice(1) };
+  return node ? { found: true, node } : { found: false, parent: root, segment: dataPath[0], remaining: dataPath.slice(1) };
 }
 
 function replaceValueEdit(fileContent: string, node: Node, value: unknown): Edit {
@@ -237,7 +146,7 @@ function replaceValueEdit(fileContent: string, node: Node, value: unknown): Edit
   return { offset: node.offset, length: node.length, content: valueText };
 }
 
-function insertValueEdit(fileContent: string, parent: Node, segment: PathSegment, value: unknown): Edit {
+function insertValueEdit(fileContent: string, parent: Node, segment: TPathSegment, value: unknown): Edit {
   const unit = detectIndentUnit(fileContent);
   const braceIndent = lineIndentAt(fileContent, parent.offset);
   const childIndent = `${braceIndent}${unit}`;
@@ -259,13 +168,7 @@ function insertValueEdit(fileContent: string, parent: Node, segment: PathSegment
   throw new JsonDataError(`Cannot insert into a ${parent.type} value`);
 }
 
-function insertObjectPropertyEdit(
-  fileContent: string,
-  parent: Node,
-  key: string,
-  valueText: string,
-  childIndent: string,
-): Edit {
+function insertObjectPropertyEdit(fileContent: string, parent: Node, key: string, valueText: string, childIndent: string): Edit {
   const closePos = parent.offset + parent.length - 1;
   const children = parent.children ?? [];
   const propLine = `${childIndent}${JSON.stringify(key)}: ${valueText}`;
@@ -297,13 +200,7 @@ function insertObjectPropertyEdit(
   return insertEditAt(lastEnd, `,${newlineFor(fileContent)}${propLine}`);
 }
 
-function insertArrayElementEdit(
-  fileContent: string,
-  parent: Node,
-  index: number,
-  valueText: string,
-  childIndent: string,
-): Edit {
+function insertArrayElementEdit(fileContent: string, parent: Node, index: number, valueText: string, childIndent: string): Edit {
   const closePos = parent.offset + parent.length - 1;
   const children = parent.children ?? [];
   const elementLine = `${childIndent}${valueText}`;
@@ -380,7 +277,7 @@ function valueToText(value: unknown, lineIndent: string, unit: string): string {
   throw new JsonDataError(`Value of type "${typeof value}" is not JSON-compatible`);
 }
 
-function buildNestedValue(segments: PathSegment[], value: unknown): unknown {
+function buildNestedValue(segments: TDataPath, value: unknown): unknown {
   let current: unknown = value;
   for (let i = segments.length - 1; i >= 0; i--) {
     const segment = segments[i];
@@ -403,31 +300,10 @@ function serializeRoot(value: unknown): string {
   return `${valueToText(value, '', unit)}\n`;
 }
 
-function detectIndentUnit(text: string): string {
-  const lines = text.split(/\r?\n/);
-  let smallest: string | null = null;
-  for (const line of lines) {
-    const match = line.match(/^([ \t]+)\S/);
-    if (match) {
-      const candidate = match[1];
-      if (!smallest || candidate.length < smallest.length) {
-        smallest = candidate;
-      }
-    }
-  }
-  if (smallest) {
-    return smallest.startsWith('\t') ? '\t' : smallest;
-  }
-  return '  ';
-}
 
-function lineIndentAt(text: string, offset: number): string {
-  const lineStart = text.lastIndexOf('\n', offset) + 1;
-  const match = /^[ \t]*/.exec(text.slice(lineStart, lineStart + 512))?.[0] ?? '';
-  return match;
-}
 
-function pathToString(path: DataPathInput): string {
+
+function pathToString(path: TDataPath): string {
   if (typeof path === 'string') {
     return path;
   }

@@ -1,4 +1,4 @@
 export * from './path';
-export * from './json';
-export * from './yaml';
+export * from './formats/json/json';
+export * from './formats/yaml/yaml';
 export * from './io';

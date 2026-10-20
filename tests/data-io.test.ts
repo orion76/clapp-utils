@@ -1,6 +1,7 @@
-import { readValue, writeValue, addValue, detectFileFormat, DataAccessError, parsePath } from '../src/data-file';
 import fs from 'fs';
 import path from 'path';
+import { addValue, detectFileFormat, readValue, writeValue } from '../src/data-file';
+import { DataAccessError } from '../src/data-file/errors';
 
 const testDir = '/tmp/clapp-utils-tests';
 if (!fs.existsSync(testDir)) {
@@ -46,27 +47,27 @@ describe('data-io', () => {
 
   describe('readValue', () => {
     it('reads from JSON file', () => {
-      expect(readValue(testJsonFile, 'name')).toBe('test');
+      expect(readValue(testJsonFile, ['name'])).toBe('test');
     });
 
     it('reads from YAML file', () => {
-      expect(readValue(testYamlFile, 'name')).toBe('test');
+      expect(readValue(testYamlFile, ['name'])).toBe('test');
     });
 
     it('returns undefined for missing path', () => {
-      expect(readValue(testJsonFile, 'missing')).toBeUndefined();
+      expect(readValue(testJsonFile, ['missing'])).toBeUndefined();
     });
   });
 
   describe('writeValue', () => {
     it('writes to JSON file', () => {
-      writeValue(testJsonFile, 'name', 'updated');
+      writeValue(testJsonFile, ['name'], 'updated');
       const content = fs.readFileSync(testJsonFile, 'utf8');
       expect(content).toContain('updated');
     });
 
     it('writes to YAML file', () => {
-      writeValue(testYamlFile, 'name', 'updated');
+      writeValue(testYamlFile, ['name'], 'updated');
       const content = fs.readFileSync(testYamlFile, 'utf8');
       expect(content).toContain('updated');
     });
@@ -74,13 +75,13 @@ describe('data-io', () => {
 
   describe('addValue', () => {
     it('adds value to JSON file', () => {
-      addValue(testJsonFile, 'newKey', 'newValue');
+      addValue(testJsonFile, ['newKey'], 'newValue');
       const content = fs.readFileSync(testJsonFile, 'utf8');
       expect(content).toContain('"newKey": "newValue"');
     });
 
     it('adds value to YAML file', () => {
-      addValue(testYamlFile, 'newKey', 'newValue');
+      addValue(testYamlFile, ['newKey'], 'newValue');
       const content = fs.readFileSync(testYamlFile, 'utf8');
       expect(content).toContain('newKey: newValue');
     });
@@ -88,7 +89,7 @@ describe('data-io', () => {
 
   describe('DataAccessError', () => {
     it('throws for unsupported format', () => {
-      expect(() => readValue(path.join(testDir, 'test.txt'), 'name')).toThrow(DataAccessError);
+      expect(() => readValue(path.join(testDir, 'test.txt'), ['name'])).toThrow(DataAccessError);
     });
   });
 });

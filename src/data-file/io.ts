@@ -7,28 +7,10 @@
  */
 import fs from 'fs';
 import path from 'path';
-import { addJsonValue, getJsonValue, setJsonValue } from './json';
-import { parsePath, escapePath, type DataPathInput } from './path';
-import { addYamlValue, getYamlValue, setYamlValue } from './yaml';
 
-/**
- * Supported data file formats, selected by the file extension.
- */
-export type DataFormat = 'json' | 'jsonc' | 'yaml' | 'yml';
-
-export class DataAccessError extends Error {
-  readonly filePath: string;
-  readonly format?: DataFormat;
-  readonly path?: DataPathInput;
-
-  constructor(message: string, filePath: string, format?: DataFormat, dataPath?: DataPathInput) {
-    super(message);
-    this.name = 'DataAccessError';
-    this.filePath = filePath;
-    this.format = format;
-    this.path = dataPath;
-  }
-}
+import { DataAccessError } from './errors';
+import { createFile } from './file-factory';
+import { TDataPath, UDataFormat } from './types';
 
 /**
  * Detect the data format for a file path from its extension.
@@ -37,22 +19,17 @@ export class DataAccessError extends Error {
  * @returns detected format
  * @throws {DataAccessError} for an unsupported extension
  */
-export function detectFileFormat(filePath: string): DataFormat {
+export function detectFileFormat(filePath: string): UDataFormat {
   const ext = path.extname(filePath).toLowerCase();
   switch (ext) {
+    case '.jsonc':
     case '.json':
       return 'json';
-    case '.jsonc':
-      return 'jsonc';
     case '.yaml':
-      return 'yaml';
     case '.yml':
-      return 'yml';
+      return 'yaml';
     default:
-      throw new DataAccessError(
-        `Unsupported data file format "${ext}" (expected .json, .jsonc, .yaml or .yml)`,
-        filePath,
-      );
+      throw new DataAccessError(`Unsupported data file format "${ext}" (expected .json, .jsonc, .yaml or .yml)`, filePath);
   }
 }
 
@@ -77,7 +54,7 @@ function writeFile(filePath: string, content: string): void {
   }
 }
 
-function withContext(action: () => unknown, filePath: string, format: DataFormat, dataPath: DataPathInput): unknown {
+function withContext(action: () => unknown, filePath: string, dataPath: TDataPath): unknown {
   try {
     return action();
   } catch (error) {
@@ -85,12 +62,7 @@ function withContext(action: () => unknown, filePath: string, format: DataFormat
       throw error;
     }
     const message = error instanceof Error ? error.message : String(error);
-    throw new DataAccessError(
-      `${describeTry(filePath)} at path "${stringifyDataPath(dataPath)}" (${format}): ${message}`,
-      filePath,
-      format,
-      dataPath,
-    );
+    throw new DataAccessError(`${describeTry(filePath)} at path "${stringifyDataPath(dataPath)}" : ${message}`, filePath, dataPath);
   }
 }
 
@@ -98,10 +70,7 @@ function describeTry(filePath: string): string {
   return `Failed to access value in data file "${filePath}"`;
 }
 
-function stringifyDataPath(dataPath: DataPathInput): string {
-  if (typeof dataPath === 'string') {
-    return dataPath;
-  }
+function stringifyDataPath(dataPath: TDataPath): string {
   return `[${dataPath.map(String).join(', ')}]`;
 }
 
@@ -114,15 +83,15 @@ function stringifyDataPath(dataPath: DataPathInput): string {
  * @throws {DataAccessError} when the file is not readable, the format is
  * unsupported, the content is invalid or the path is invalid
  */
-export function readValue(filePath: string, dataPath: DataPathInput): unknown {
-  const format = detectFileFormat(filePath);
-  const content = readFile(filePath);
-  return withContext(() => {
-    if (format === 'json' || format === 'jsonc') {
-      return getJsonValue(content, dataPath);
-    }
-    return getYamlValue(content, dataPath);
-  }, filePath, format, dataPath);
+export function readValue(filePath: string, dataPath: TDataPath): unknown {
+  return withContext(
+    () => {
+      const file = createFile(filePath);
+      return file.get(dataPath);
+    },
+    filePath,
+    dataPath,
+  );
 }
 
 /**
@@ -135,16 +104,15 @@ export function readValue(filePath: string, dataPath: DataPathInput): unknown {
  * @throws {DataAccessError} when the file is not readable/writable, the format
  * is unsupported, the content is invalid or the path is invalid
  */
-export function writeValue(filePath: string, dataPath: DataPathInput, value: unknown): void {
-  const format = detectFileFormat(filePath);
-  const content = readFile(filePath, true);
-  const updated = withContext(() => {
-    if (format === 'json' || format === 'jsonc') {
-      return setJsonValue(content, dataPath, value);
-    }
-    return setYamlValue(content, dataPath, value);
-  }, filePath, format, dataPath) as string;
-  writeFile(filePath, updated);
+export function writeValue(filePath: string, dataPath: TDataPath, value: unknown): void {
+  withContext(
+    () => {
+      const file = createFile(filePath);
+      return file.set(dataPath, value);
+    },
+    filePath,
+    dataPath,
+  );
 }
 
 /**
@@ -157,14 +125,24 @@ export function writeValue(filePath: string, dataPath: DataPathInput, value: unk
  * @throws {DataAccessError} when the file is not readable/writable, the format
  * is unsupported, the content is invalid or the path is invalid
  */
-export function addValue(filePath: string, dataPath: DataPathInput, value: unknown): void {
-  const format = detectFileFormat(filePath);
-  const content = readFile(filePath, true);
-  const updated = withContext(() => {
-    if (format === 'json' || format === 'jsonc') {
-      return addJsonValue(content, dataPath, value);
-    }
-    return addYamlValue(content, dataPath, value);
-  }, filePath, format, dataPath) as string;
-  writeFile(filePath, updated);
+export function addValue(filePath: string, dataPath: TDataPath, value: unknown): void {
+  withContext(
+    () => {
+      const file = createFile(filePath);
+      return file.set(dataPath, value);
+    },
+    filePath,
+    dataPath,
+  );
+}
+
+export function deleteValue(filePath: string, dataPath: TDataPath): void {
+  withContext(
+    () => {
+      const file = createFile(filePath);
+      return file.delete(dataPath);
+    },
+    filePath,
+    dataPath,
+  );
 }
