@@ -60,14 +60,47 @@ class JsonAstNodeImpl implements JsonAstNode {
     return this._parent;
   }
 
+  /**
+   * Get one child node by position.
+   *
+   * Delegates to {@link childs}, so the position is validated in one place only: it must be
+   * an integer with `0 <= pos <= childCount`.
+   *
+   * @param pos - 0-based child position
+   * @returns the child at `pos`, or `null` when `pos` equals the number of children (an
+   * empty range)
+   * @throws {RangeError} when `pos` is not an integer, is negative or is greater than the
+   * number of children; the message carries the requested range and the child count
+   */
   child(pos: number): JsonAstNode | null {
-    if (!Number.isInteger(pos) || pos < 0 || pos >= this._childs.length) {
-      return null;
-    }
-    return this._childs[pos];
+    const nodes = this.childs(pos);
+    return nodes.length > 0 ? nodes[0] : null;
   }
 
-  childs(begin?: number, end?: number): JsonAstNode[] {
+  /**
+   * Get a range of child nodes.
+   *
+   * Both bounds are optional: without arguments all children are returned, `begin` alone
+   * selects the children from `begin` to the end, and both select `[begin, end)`. The
+   * result is a copy, so changing it does not affect the tree.
+   *
+   * @param begin - inclusive 0-based start index (default `0`)
+   * @param end - exclusive 0-based end index (default: the number of children)
+   * @returns a new array holding the children in `[begin, end)`
+   * @throws {RangeError} when `begin` or `end` is not an integer, or the range is not inside
+   * `0 <= begin <= end <= childCount`; the message carries the requested range, the child
+   * count and the allowed range
+   */
+  childs(begin: number = 0, end: number = this._childs.length): JsonAstNode[] {
+    const childCount = this._childs.length;
+    const hasIntegerBounds = Number.isInteger(begin) && Number.isInteger(end);
+    const isOrdered = begin >= 0 && begin <= end && end <= childCount;
+    if (!hasIntegerBounds || !isOrdered) {
+      throw new RangeError(
+        `childs: invalid range [${begin}, ${end}) for ${childCount} children ` +
+          `(expected integers with 0 <= begin <= end <= ${childCount})`,
+      );
+    }
     return this._childs.slice(begin, end);
   }
 

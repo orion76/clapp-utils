@@ -81,10 +81,34 @@ export interface JsonAstNode {
   /** Get the parent node, `null` for the root node. */
   parent(): JsonAstNode | null;
 
-  /** Get one child node by position, `null` when out of range. */
+  /**
+   * Get one child node by position.
+   *
+   * Implemented through `childs(pos)`, so the position is validated by that method: it must
+   * be an integer with `0 <= pos <= childCount`. `null` is returned only when `pos` equals
+   * the number of children (an empty range), never for an invalid position.
+   *
+   * @param pos - 0-based child position
+   * @returns the child at `pos`, or `null` when `pos === childCount`
+   * @throws {RangeError} when `pos` is not an integer, is negative or exceeds the number of
+   * children; the message carries the requested range and the child count
+   */
   child(pos: number): JsonAstNode | null;
 
-  /** Get all child nodes, or the range `[begin, end)` of them. */
+  /**
+   * Get all child nodes, or the range `[begin, end)` of them.
+   *
+   * Both bounds must be integers with `0 <= begin <= end <= childCount`; without arguments
+   * all children are returned. The returned array is a copy: changing it does not affect
+   * the tree.
+   *
+   * @param begin - inclusive 0-based start index (default `0`)
+   * @param end - exclusive 0-based end index (default: the number of children)
+   * @returns a new array with the children in `[begin, end)`
+   * @throws {RangeError} when a bound is not an integer or the range leaves
+   * `0 <= begin <= end <= childCount`; the message carries the requested range, the child
+   * count and the allowed range
+   */
   childs(begin?: number, end?: number): JsonAstNode[];
 
   /**
