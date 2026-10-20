@@ -29,7 +29,7 @@ export default [
         exclude: ['node_modules/**']
       }),
     ],
-    external: []
+    external: ['jsonc-parser', 'yaml']
   },
   // TypeScript definitions bundle
   {
