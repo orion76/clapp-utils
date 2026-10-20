@@ -107,7 +107,7 @@ function childNode(node: Node, segment: PathSegment): Node | undefined {
       // A numeric segment against an object is not an existing composite path.
       return undefined;
     }
-    const prop = (node.children ?? []).find((candidate: { children?: { value?: string } }) => candidate.children?.[0]?.value === segment);
+    const prop = (node.children ?? []).find((candidate: Node) => candidate.children?.[0]?.value === segment);
     return prop ? (prop.children?.[1] ?? undefined) : undefined;
   }
   if (node.type === 'array') {
@@ -200,7 +200,7 @@ function findInsertionPoint(root: Node, segments: PathSegment[], path: DataPathI
           `Array index "${segment}" used against an object at path "${pathToString(path)}"`,
         );
       }
-      const prop = (node.children ?? []).find((candidate: { children?: { value?: string } }) => candidate.children?.[0]?.value === segment);
+      const prop = (node.children ?? []).find((candidate: Node) => candidate.children?.[0]?.value === segment);
       if (!prop) {
         return { found: false, parent: node, segment, remaining: segments.slice(i + 1) };
       }
