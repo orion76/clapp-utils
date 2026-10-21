@@ -126,6 +126,29 @@ function lastCommentIsLine(tokens: TriviaToken[]): boolean {
   return false;
 }
 
+/**
+ * Check whether a text ends inside a `//` comment.
+ *
+ * Everything appended to such a text would become part of the comment, so an insertion has
+ * to start a new line first. Text that ends with a line break after a `//` comment is safe
+ * and reports `false`.
+ */
+function endsInLineComment(text: string): boolean {
+  const tokens = tokenizeTrivia(text);
+  if (tokens === null) {
+    return false;
+  }
+  let index = tokens.length - 1;
+  while (index >= 0 && tokens[index].kind === 'space') {
+    if (tokens[index].text.includes('\n')) {
+      return false;
+    }
+    index -= 1;
+  }
+  const token = index >= 0 ? tokens[index] : null;
+  return token !== null && token.kind === 'comment' && token.text.startsWith('//');
+}
+
 /** Join a head and a tail, keeping a space before a comment that would touch the head. */
 function joinComment(head: string, tail: string): string {
   if (tail.startsWith('/') && head !== '' && !isWhitespaceChar(head.charAt(head.length - 1))) {
@@ -178,8 +201,13 @@ function brackets(container: JsonAstNode): [string, string] {
 /**
  * Formatting of a container taken from its own text.
  *
- * A container is multiline when its `prolog` or its `epilog` contains a newline; the child
- * indent is the whitespace after the last newline of the `prolog` and the separator is `,`
+ * A container is multiline when its `prolog` or its `epilog` contains a newline, or when
+ * the text after its last child ends inside a `//` comment: a value appended on the same
+ * line would land in that comment, so the insertion must start a new line. The child indent
+ * is the whitespace after the last newline of the `prolog`; for a container that opens on
+ * the same line as its first child and is multiline only because of a trailing `//`
+ * comment, the indent comes from the comment line (or one default step after the closing
+ * bracket indentation when the comment does not start its own line). The separator is `,`
  * plus a newline plus that indent. A single-line container separates children with `, `.
  * The line break comes from the container text: CRLF when it appears there, LF otherwise,
  * so an inserted line never mixes the two styles.
@@ -188,11 +216,30 @@ export function containerStyle(container: JsonAstNode): ContainerStyle {
   const prolog = attribute(container, 'prolog');
   const epilog = attribute(container, 'epilog');
   const newline = lineBreak(prolog, epilog);
-  if (!prolog.includes('\n') && !epilog.includes('\n')) {
+  const tail = takeTrailingLayout(lastChildTail(container)).text;
+  const lineComment = endsInLineComment(tail);
+  if (!prolog.includes('\n') && !epilog.includes('\n') && !lineComment) {
     return { multiline: false, indent: '', separator: ', ', newline };
   }
-  const indent = leadingWhitespace(lastLine(prolog));
+  // The usual indent comes from the `prolog`; a container that opens on the same line as
+  // its first child has none, so a trailing `//` comment line supplies it instead.
+  let indent = leadingWhitespace(lastLine(prolog));
+  if (!prolog.includes('\n') && lineComment) {
+    indent = commentIndent(container, tail);
+  }
   return { multiline: true, indent, separator: `,${newline}${indent}`, newline };
+}
+
+/**
+ * Indentation of a new child of a container that has no newline of its own but is
+ * multiline because of a trailing `//` comment.
+ *
+ * The comment line indentation is reused when the comment starts its own line, otherwise
+ * one default step is added to the indentation of the closing bracket.
+ */
+function commentIndent(container: JsonAstNode, tail: string): string {
+  const indent = leadingWhitespace(lastLine(tail));
+  return indent !== '' ? indent : ownIndent(container) + DEFAULT_INDENT_STEP;
 }
 
 /**
@@ -345,13 +392,40 @@ function containerPrefix(container: JsonAstNode, epilog: string): string {
 }
 
 /**
+ * Raw text after the content of the last child of a container, before its closing bracket.
+ *
+ * The parser stores the text before the closing bracket in the `epilog` of the last child,
+ * while a container child keeps its own closing bracket at the start of its `epilog`. This
+ * helper returns only the part that follows the child content: separators, comments and the
+ * layout up to the closing bracket, so the caller can tell how an appended child would sit
+ * in the document.
+ *
+ * @returns the trailing text, `''` for an empty container
+ */
+function lastChildTail(container: JsonAstNode): string {
+  const children = container.childs();
+  if (children.length === 0) {
+    return '';
+  }
+  const previous = children[children.length - 1];
+  const content = contentEnd(previous);
+  const contentEpilog = attribute(content, 'epilog');
+  if (content === previous) {
+    return contentEpilog;
+  }
+  const prefix = containerPrefix(content, contentEpilog);
+  return contentEpilog.slice(prefix.length) + attribute(previous, 'epilog');
+}
+
+/**
  * Add the text that separates the last child from a new one.
  *
  * The returned text is the given `epilog` with a separator comma and the layout of the
  * container (`\n` plus indent, or a space) placed after the content, while comments and
  * other trivia stay where they were. A trailing comma already present in the `epilog` is
  * reused instead of adding a second one, so appending to a JSONC document with a trailing
- * comma stays valid and keeps its comments.
+ * comma stays valid and keeps its comments. A `//` comment at the end of the text gets a
+ * line break after it, because the container style of such a document is multiline.
  *
  * @param epilog - trailing text of the previous child (brackets, trivia, separators)
  * @param style - formatting of the receiving container
