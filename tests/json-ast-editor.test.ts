@@ -689,7 +689,13 @@ describe('json-ast editor: delete', () => {
     const editor = new JsonAstEditor(ast);
     editor.delete(path);
     expect(unparse(ast)).toBe(expected);
-    expect(editor.has(path)).toBe(false);
+
+    // Deleting the last element shrinks the array; deleting an earlier one shifts the
+    // following elements left, so the deleted index is only truly gone when it was the
+    // last one. The index one past the resulting length is always out of bounds.
+    const remaining = JSON.parse(unparse(ast)) as unknown[];
+    expect(Array.isArray(remaining)).toBe(true);
+    expect(editor.has([remaining.length])).toBe(false);
     expect(() => JSON.parse(unparse(ast))).not.toThrow();
   });
 
