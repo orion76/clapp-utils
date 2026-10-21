@@ -47,23 +47,6 @@ export type JsonAstWalkCallback = (
 ) => void;
 
 /**
- * One segment of a path into a parsed JSON document.
- *
- * A string addresses an object key as is. A number addresses an array index and, on an
- * object, the key `String(number)` — the same rule the `data-file` path parser uses, so
- * paths stay structurally compatible with `TDataPath`.
- */
-export type JsonAstPathSegment = string | number;
-
-/**
- * Path into a parsed JSON document: an object key or an array index per level.
- *
- * Declared inside `json-ast` on purpose: the module stays self-contained and does not
- * import anything from `data-file`.
- */
-export type JsonAstPath = JsonAstPathSegment[];
-
-/**
  * A node of the lossless JSON AST.
  *
  * Nodes keep the raw text of the parsed document in their attributes, so unparsing an
