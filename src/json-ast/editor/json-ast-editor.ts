@@ -90,16 +90,18 @@ export class JsonAstEditor {
   /**
    * Check whether a path addresses an existing value.
    *
-   * The check is a boolean view of {@link node}: a path that resolves yields `true`,
-   * anything that does not is `false`. A missing key, a missing index, an index beyond the
-   * array bounds, an index string that is not canonical, a path running through a scalar
-   * value and a segment that is not a valid path segment all simply mean "no such path",
-   * so the method never throws.
+   * Segments are validated first, so a segment that is not a string or a non-negative
+   * integer number is rejected instead of reporting a missing value. Everything else is a
+   * boolean view of {@link node}: a missing key, a missing index, an index beyond the array
+   * bounds, an index string that is not canonical and a path running through a scalar value
+   * mean "no such path" and yield `false`.
    *
    * @param path - object keys and array indexes; an empty path always exists
    * @returns `true` when the whole path exists, `false` otherwise
+   * @throws {JsonAstPathError} when the path is not an array or a segment is not a valid path segment
    */
   has(path: JsonAstPath): boolean {
+    validatePath(path);
     try {
       this.node(path);
       return true;
