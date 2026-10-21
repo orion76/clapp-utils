@@ -54,14 +54,14 @@ const text: string = JsonAst.unparse(ast);
 
 - `JsonAst.parse(json: string): JsonAstNode` — parse a document; returns the root node.
 - `JsonAst.unparse(ast: JsonAstNode): string` — restore the source text.
-- `JsonAstEditor` — path based reads and formatting-preserving edits (`node`, `has`, `get`, `set`, `add`, `delete`; see below).
+- `JsonAstEditor` — an editor instance over a parsed tree with path based reads and formatting-preserving edits (`node`, `has`, `get`, `set`, `push`, `delete`; see below).
 - `JsonAstPathError` — failure of a path based operation; carries `path` and `segmentIndex` (`null` for a path-wide failure).
 - `JsonAstPath` / `JsonAstPathSegment` — `(string | number)[]` and `string | number`.
 - `JsonAstNode` — the node interface (`packages/utils/src/json-ast/types.ts:83`).
 - `JsonAstNodeType` — `'object' | 'member' | 'array' | 'string' | 'number' | 'boolean' | 'null'`.
 - `AstNodePos` — `{ line: number; column: number; offset: number }`, 1-based line and column, 0-based offset.
 
-The module is exported from the package root (`packages/utils/src/index.ts:7`); it re-exports `json-ast.ts`, `types.ts`, `editor.ts` and `errors.ts`. The parser factory `parseJsonAst` and the node factory `createNode` are internal and stay out of the package API.
+The module is exported from the package root (`packages/utils/src/index.ts:7`) through `packages/utils/src/json-ast/index.ts`, which re-exports `json-ast.ts`, `types.ts` and the `editor/` folder. The parser factory `parseJsonAst`, the node factory `createNode` and the editor helpers (`path.ts`, `value.ts`, `build.ts`, `format.ts`) are internal and stay out of the package API.
 
 ### Node model
 
@@ -153,31 +153,37 @@ root.walk((node, depth, parent, when) => {
 
 ### Path based editing (`JsonAstEditor`)
 
-`JsonAstEditor` reads and edits a parsed document by path. A path is an array of segments: a string is an object key, a number is an array index and, on an object, the key `String(number)`; a canonical decimal string (`'0'`, `'1'`, ...) is also accepted as an array index. With duplicate keys the last occurrence wins, exactly as in `JSON.parse`. An empty path addresses the document root for reads and is rejected by every mutation.
+`JsonAstEditor` reads and edits a parsed document by path. Create one editor over a tree produced by `JsonAst.parse` and call its instance methods: every method works on that tree in place, so the editor holds no other state and `JsonAst.unparse(ast)` renders the result after each change. There are no static methods.
+
+A path is an array of segments: a string is an object key, a number is an array index and, on an object, the key `String(number)`; a canonical decimal string (`'0'`, `'1'`, ...) is also accepted as an array index. With duplicate keys the last occurrence wins, exactly as in `JSON.parse`. An empty path addresses the document root for reads and is rejected by `set` and `delete`; `push` accepts it only when the root itself is an array.
 
 ```ts
 import { JsonAst, JsonAstEditor } from '@clapp/utils';
 
-const ast = JsonAst.parse('{"name": "clapp", "scripts": {"build": "rollup -c"}}');
+const ast = JsonAst.parse('{"name": "clapp", "scripts": {"build": "rollup -c"}, "tags": []}');
+const editor = new JsonAstEditor(ast);
 
-JsonAstEditor.get(ast, ['scripts', 'build']); // 'rollup -c'
-JsonAstEditor.has(ast, ['scripts', 'test']); // false
+editor.get(['scripts', 'build']); // 'rollup -c'
+editor.has(['scripts', 'test']); // false
 
-JsonAstEditor.set(ast, ['name'], 'clapp-2'); // existing value only
-JsonAstEditor.add(ast, ['scripts', 'test'], 'jest'); // new key or element only
-JsonAstEditor.delete(ast, ['scripts', 'build']);
+editor.set(['name'], 'clapp-2'); // replace an existing value
+editor.set(['scripts', 'test'], 'jest'); // create a missing key
+editor.push(['tags'], 'cli'); // append to an existing array
+editor.delete(['scripts', 'build']);
 
-JsonAst.unparse(ast); // {"name": "clapp-2", "scripts": {"test": "jest"}}
+JsonAst.unparse(ast); // {"name": "clapp-2", "scripts": {"test": "jest"}, "tags": ["cli"]}
 ```
 
-- `node(ast, path)` — the addressed node; `has(ast, path)` — whether the path exists (a missing key, a missing index and a path through a scalar return `false`, only invalid segments throw); `get(ast, path)` — plain JavaScript values (objects in document order, the last duplicate key wins, arrays, scalar `value`).
-- `set(ast, path, value)` — replaces an existing value. A scalar replaced by a scalar of the same type only rewrites its literal; any other replacement rebuilds the node, so `type()` describes the new value. A missing path is an error.
-- `add(ast, path, value)` — creates a value that must not exist yet. An object member is always appended after the existing members; an existing key is an error (use `set`). An array index must be in `0..length`, where `length` appends.
-- `delete(ast, path)` — removes an object member or an array element, cleans up the surrounding separator and normalises a container that becomes empty to `{}`/`[]`.
+- `node(path)` — the addressed node: the value node of an object member, the element of an array or the document root for an empty path.
+- `has(path)` — whether the whole path exists. Segments are validated first, so a segment that is not a string or a non-negative integer number throws `JsonAstPathError`; a missing key, a missing index, an index beyond the array bounds, a non-canonical index string and a path through a scalar return `false`.
+- `get(path)` — plain JavaScript values: objects in document order (the last duplicate key wins), arrays and scalar `value`; raw `prolog`/`body`/`epilog` are never exposed.
+- `set(path, value)` — writes a value. An existing address is replaced: a scalar replaced by a scalar of the same type only rewrites its literal, while any other replacement rebuilds the node so `type()` describes the new value. A missing address is created inside the existing parent: an object receives a new key appended after its members and an array receives a new element at `index === length` (a larger index is an error, use `push`). Intermediate segments are never created: the parent must exist and be an object or an array.
+- `push(path, value)` — appends a value to the end of an existing array addressed by the path (or to an array document root for an empty path). A missing path, a scalar and an object are errors.
+- `delete(path)` — removes an object member or an array element and cleans up the separator of the preceding member, keeping the rest of its text (the closing bracket of a container neighbour, for example). A container that becomes empty is normalised to `{}`/`[]`; the path must exist.
 
-Every untouched byte of the document stays intact. New text follows the style of the receiving container: a multiline container uses its own indentation and the line break of the document (CRLF when the container text already uses it, LF otherwise), a single-line container uses `, `, and an empty container receives the first value compactly. `pos()` is not recalculated: positions describe the original parse and `JsonAst.unparse` does not use them.
+Every untouched byte of the document stays intact. New text follows the style of the receiving container: a multiline container uses its own indentation and the line break of the document (CRLF when the container text already uses it, LF otherwise), a single-line container uses `, `, and an empty container receives the first value compactly. When a value is appended, the trailing layout of the previous child moves to the new last child, so a separator is written right after the content. `pos()` is not recalculated: positions describe the original parse, a built node keeps the position of the replaced node or of the receiving container, and `JsonAst.unparse` does not use positions.
 
-Path failures throw `JsonAstPathError` with the whole `path` and the `segmentIndex` of the failing segment (`null` when the path itself is invalid). Values that are not JSON (`undefined`, a function, a symbol, a bigint, `NaN`, `Infinity`, a non-plain object) and circular references throw a plain `Error`.
+Path failures throw `JsonAstPathError` with the whole `path` and the `segmentIndex` of the failing segment (`null` when the path itself is invalid). Values that are not JSON (`undefined`, a function, a symbol, a bigint, `NaN`, `Infinity`, a non-plain object) and circular references throw a plain `Error` before the tree is touched.
 
 ### Errors
 
@@ -208,7 +214,7 @@ try {
 ### Boundaries
 
 - The grammar is strict JSON: no comments and no trailing commas. JSONC remains the job of `jsonc-parser` in `data-file` (`packages/utils/src/data-file/formats/json/json.ts:11`).
-- There is no `dump`, no coloured output, no CLI/`bin` and no AST query language. Structural edits are limited to one existing value at a time through `JsonAstEditor` (`set`/`add`/`delete`): no moves or copies between documents, no bulk edits, no patch/diff.
+- There is no `dump`, no coloured output, no CLI/`bin` and no AST query language. Structural edits are limited to one existing or new value at a time through `JsonAstEditor` (`set`/`push`/`delete`): no moves or copies between documents, no bulk edits, no patch/diff.
 - The parser is an independent recursive descent implementation (`packages/utils/src/json-ast/parse.ts:78`). It uses no PEG/ASTy tooling and adds no dependencies: the runtime dependencies are still `jsonc-parser`, `object-path` and `yaml` (plus the `@orion76/logger` peer).
 - The lossless attribute model is inspired by [json-asty](https://github.com/rse/json-asty) 1.3.4 (MIT, Copyright © 2018-2026 Dr. Ralf S. Engelschall); the code is an independent implementation. The attribution is repeated in the module headers (`packages/utils/src/json-ast/json-ast.ts:10`, `parse.ts:5`, `node.ts:4`, `types.ts:4`).
 
@@ -220,7 +226,7 @@ npx tsc --noEmit -p packages/utils/tsconfig.tests.json
 npm run build:utils
 ```
 
-The `json-ast` suites are `packages/utils/tests/json-ast.test.ts` (round-trip, the AST shape, the `childs`/`child` contract and parse errors) and `packages/utils/tests/json-ast-editor.test.ts` (reads, `set`/`add`/`delete`, formatting, CRLF, error paths and invariants). The other `data-*` suites are currently red for a pre-existing reason after the `data-file/formats/**` refactor (tracked separately); a full package run is not green until that is fixed.
+The `json-ast` suites are `packages/utils/tests/json-ast.test.ts` (round-trip, the AST shape, the `childs`/`child` contract and parse errors) and `packages/utils/tests/json-ast-editor.test.ts` (reads, `set`/`push`/`delete`, formatting, CRLF, error paths and invariants). The other `data-*` suites are currently red for a pre-existing reason after the `data-file/formats/**` refactor (tracked separately); a full package run is not green until that is fixed.
 
 ## License
 
