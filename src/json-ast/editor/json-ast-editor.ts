@@ -41,6 +41,7 @@ import {
   outsidePrefix,
   outsideSuffix,
   prepareContainerForInsert,
+  stripTrailingSeparator,
 } from './format';
 import {
   arrayIndex,
@@ -285,9 +286,12 @@ export class JsonAstEditor {
    * Remove the existing value addressed by a path.
    *
    * An object key removes the whole member, an array index removes the element. Removing
-   * the last member or element also removes the separator of the preceding one; a container
-   * that becomes empty is normalised to `{}` or `[]` (its inner whitespace is dropped, the
-   * whitespace around it is kept). Node positions of the remaining nodes stay as parsed.
+   * the last member or element also removes the separator of the preceding one, and only
+   * the separator: the tail of its `epilog` from the last comma on (`", "`, `",\n  "`,
+   * `",\r\n"`), so the text of the preceding node itself — the closing bracket of a
+   * container, for example — stays in place. A container that becomes empty is normalised to
+   * `{}` or `[]` (its inner whitespace is dropped, the whitespace around it is kept). Node
+   * positions of the remaining nodes stay as parsed.
    *
    * @param path - path of an existing value, never empty
    * @throws {JsonAstPathError} when the path is empty or invalid, does not exist, or runs
@@ -310,7 +314,7 @@ export class JsonAstEditor {
     if (slot.slotIndex === children.length - 1) {
       const previous = container.child(slot.slotIndex - 1);
       if (previous !== null) {
-        previous.set('epilog', '');
+        stripTrailingSeparator(previous);
       }
     }
   }

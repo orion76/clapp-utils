@@ -187,6 +187,27 @@ export function appendChild(container: JsonAstNode, child: JsonAstNode, style: C
   insertChild(container, children.length, child);
 }
 
+/** Trailing separator of a child `epilog`: `ws? "," ws?` as the parser stores it. */
+const TRAILING_SEPARATOR = /\s*,\s*$/;
+
+/**
+ * Remove the trailing separator from the `epilog` of a member or an element.
+ *
+ * The parser appends `ws? "," ws?` to the `epilog` of the preceding child, while a container
+ * child keeps its own closing bracket at the start of its `epilog` (`outsideSuffix` cuts
+ * exactly that part off). Clearing the whole `epilog` would therefore drop the bracket of a
+ * container child and leave invalid JSON, so only the tail up to the last comma is removed:
+ * `, `, `,\n  ` and `,\r\n` disappear, everything before them stays. When the `epilog` does
+ * not end with a separator it is left untouched.
+ */
+export function stripTrailingSeparator(node: JsonAstNode): void {
+  const epilog = attribute(node, 'epilog');
+  const stripped = epilog.replace(TRAILING_SEPARATOR, '');
+  if (stripped !== epilog) {
+    node.set('epilog', stripped);
+  }
+}
+
 /**
  * Key/value separator of a new object member: the `epilog` of the first existing key, or
  * the standard `": "` when the object has no members.

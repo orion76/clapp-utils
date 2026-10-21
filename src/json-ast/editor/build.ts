@@ -7,7 +7,7 @@
  */
 import { createNode } from '../node';
 import type { AstNodePos, JsonAstNode, JsonAstNodeType } from '../types';
-import { KEY_SEPARATOR } from './format';
+import { attribute, KEY_SEPARATOR } from './format';
 import type { BuildStyle } from './types';
 
 /**
@@ -77,7 +77,9 @@ export function buildArray(values: unknown[], style: BuildStyle, pos: AstNodePos
   for (let index = 0; index < values.length; index += 1) {
     const element = buildValue(values[index], children, pos);
     if (index < values.length - 1) {
-      element.set('epilog', separator);
+      // A container element keeps its closing bracket at the start of its `epilog`, so the
+      // separator is appended instead of replacing the attribute.
+      element.set('epilog', attribute(element, 'epilog') + separator);
     }
     elements.push(element);
   }
