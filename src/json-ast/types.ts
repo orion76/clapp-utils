@@ -47,6 +47,23 @@ export type JsonAstWalkCallback = (
 ) => void;
 
 /**
+ * One segment of a path into a parsed JSON document.
+ *
+ * A string addresses an object key as is. A number addresses an array index and, on an
+ * object, the key `String(number)` — the same rule the `data-file` path parser uses, so
+ * paths stay structurally compatible with `TDataPath`.
+ */
+export type JsonAstPathSegment = string | number;
+
+/**
+ * Path into a parsed JSON document: an object key or an array index per level.
+ *
+ * Declared inside `json-ast` on purpose: the module stays self-contained and does not
+ * import anything from `data-file`.
+ */
+export type JsonAstPath = JsonAstPathSegment[];
+
+/**
  * A node of the lossless JSON AST.
  *
  * Nodes keep the raw text of the parsed document in their attributes, so unparsing an
@@ -59,8 +76,9 @@ export type JsonAstWalkCallback = (
  * - `value` — the decoded JavaScript value of the node.
  *
  * The attribute set is intentionally open: consumers may read attributes through
- * `get`/`attrs` and set them through `set`. The methods below are the only ones the
- * module promises; it has no AST editing helpers and never writes to the output.
+ * `get`/`attrs` and set them through `set`. The methods below are the only ones this
+ * interface promises: the node itself has no editing helpers and never writes to the
+ * output, structural edits go through `JsonAstEditor`.
  */
 export interface JsonAstNode {
   /** Get the node type (`object`, `member`, `array`, `string`, `number`, `boolean`, `null`). */

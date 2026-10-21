@@ -126,6 +126,37 @@ class JsonAstNodeImpl implements JsonAstNode {
     node._parent = this;
     this._childs.push(node);
   }
+
+  /** Insert a detached child node at `pos`; called by the editor only. */
+  insertChild(pos: number, child: JsonAstNode): void {
+    if (!Number.isInteger(pos) || pos < 0 || pos > this._childs.length) {
+      throw new RangeError(`insertChild: invalid position ${pos} for ${this._childs.length} children`);
+    }
+    const node = child as JsonAstNodeImpl;
+    node._parent = this;
+    this._childs.splice(pos, 0, node);
+  }
+
+  /** Detach and return the child node at `pos`; called by the editor only. */
+  removeChild(pos: number): JsonAstNode {
+    if (!Number.isInteger(pos) || pos < 0 || pos >= this._childs.length) {
+      throw new RangeError(`removeChild: invalid position ${pos} for ${this._childs.length} children`);
+    }
+    const node = this._childs.splice(pos, 1)[0];
+    node._parent = null;
+    return node;
+  }
+
+  /** Replace the child node at `pos` with a detached node; called by the editor only. */
+  replaceChild(pos: number, child: JsonAstNode): void {
+    if (!Number.isInteger(pos) || pos < 0 || pos >= this._childs.length) {
+      throw new RangeError(`replaceChild: invalid position ${pos} for ${this._childs.length} children`);
+    }
+    const node = child as JsonAstNodeImpl;
+    this._childs[pos]._parent = null;
+    node._parent = this;
+    this._childs[pos] = node;
+  }
 }
 
 /**
@@ -158,4 +189,40 @@ export function createNode(
     }
   }
   return node;
+}
+
+/**
+ * Insert a detached node into `parent` at `pos`.
+ *
+ * Editor-internal structural mutation: `createNode` builds trees bottom-up, while
+ * `JsonAstEditor` has to splice an existing tree. The position must satisfy
+ * `0 <= pos <= childCount` and the child must not be attached anywhere yet.
+ *
+ * @internal
+ */
+export function insertChild(parent: JsonAstNode, pos: number, child: JsonAstNode): void {
+  (parent as JsonAstNodeImpl).insertChild(pos, child);
+}
+
+/**
+ * Detach the child at `pos` from `parent` and return it.
+ *
+ * Editor-internal structural mutation; the child is detached together with its subtree.
+ *
+ * @internal
+ */
+export function removeChild(parent: JsonAstNode, pos: number): JsonAstNode {
+  return (parent as JsonAstNodeImpl).removeChild(pos);
+}
+
+/**
+ * Replace the child at `pos` of `parent` with a detached node.
+ *
+ * Editor-internal structural mutation; the replaced child is detached together with its
+ * subtree.
+ *
+ * @internal
+ */
+export function replaceChild(parent: JsonAstNode, pos: number, child: JsonAstNode): void {
+  (parent as JsonAstNodeImpl).replaceChild(pos, child);
 }

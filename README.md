@@ -24,7 +24,7 @@ import { JsonAst, findProjectRoot, readValue } from '@clapp/utils';
 | `project.ts` | `loadPackageJson`                                                                      |
 | `parse-arg/` | argument parsers and their types, e.g. `parseDateString`                               |
 | `data-file/` | `readValue`, `writeValue`, `addValue`, `deleteValue`, `detectFileFormat`, `escapePath` |
-| `json-ast/`  | `JsonAst.parse` / `JsonAst.unparse` — lossless JSON AST (see below)                    |
+| `json-ast/`  | `JsonAst.parse` / `JsonAst.unparse`, `JsonAstEditor` by path — lossless JSON AST        |
 
 ### Data files (`data-file`)
 
@@ -45,8 +45,8 @@ addValue('clapp.config.yml', ['plugins', 'PLUGIN_COMMAND'], { patterns: ['comman
 ### Public API
 
 ```ts
-import { JsonAst } from '@clapp/utils';
-import type { JsonAstNode, JsonAstNodeType, AstNodePos } from '@clapp/utils';
+import { JsonAst, JsonAstEditor, JsonAstPathError } from '@clapp/utils';
+import type { JsonAstNode, JsonAstNodeType, AstNodePos, JsonAstPath, JsonAstPathSegment } from '@clapp/utils';
 
 const ast: JsonAstNode = JsonAst.parse('{"a": 1}');
 const text: string = JsonAst.unparse(ast);
@@ -54,11 +54,14 @@ const text: string = JsonAst.unparse(ast);
 
 - `JsonAst.parse(json: string): JsonAstNode` — parse a document; returns the root node.
 - `JsonAst.unparse(ast: JsonAstNode): string` — restore the source text.
-- `JsonAstNode` — the node interface (`packages/utils/src/json-ast/types.ts:65`).
+- `JsonAstEditor` — path based reads and formatting-preserving edits (`node`, `has`, `get`, `set`, `add`, `delete`; see below).
+- `JsonAstPathError` — failure of a path based operation; carries `path` and `segmentIndex` (`null` for a path-wide failure).
+- `JsonAstPath` / `JsonAstPathSegment` — `(string | number)[]` and `string | number`.
+- `JsonAstNode` — the node interface (`packages/utils/src/json-ast/types.ts:83`).
 - `JsonAstNodeType` — `'object' | 'member' | 'array' | 'string' | 'number' | 'boolean' | 'null'`.
 - `AstNodePos` — `{ line: number; column: number; offset: number }`, 1-based line and column, 0-based offset.
 
-The module is exported from the package root (`packages/utils/src/index.ts:7`); it re-exports `json-ast.ts` and `types.ts` only.
+The module is exported from the package root (`packages/utils/src/index.ts:7`); it re-exports `json-ast.ts`, `types.ts`, `editor.ts` and `errors.ts`. The parser factory `parseJsonAst` and the node factory `createNode` are internal and stay out of the package API.
 
 ### Node model
 
@@ -148,6 +151,34 @@ root.walk((node, depth, parent, when) => {
 }, 'both');
 ```
 
+### Path based editing (`JsonAstEditor`)
+
+`JsonAstEditor` reads and edits a parsed document by path. A path is an array of segments: a string is an object key, a number is an array index and, on an object, the key `String(number)`; a canonical decimal string (`'0'`, `'1'`, ...) is also accepted as an array index. With duplicate keys the last occurrence wins, exactly as in `JSON.parse`. An empty path addresses the document root for reads and is rejected by every mutation.
+
+```ts
+import { JsonAst, JsonAstEditor } from '@clapp/utils';
+
+const ast = JsonAst.parse('{"name": "clapp", "scripts": {"build": "rollup -c"}}');
+
+JsonAstEditor.get(ast, ['scripts', 'build']); // 'rollup -c'
+JsonAstEditor.has(ast, ['scripts', 'test']); // false
+
+JsonAstEditor.set(ast, ['name'], 'clapp-2'); // existing value only
+JsonAstEditor.add(ast, ['scripts', 'test'], 'jest'); // new key or element only
+JsonAstEditor.delete(ast, ['scripts', 'build']);
+
+JsonAst.unparse(ast); // {"name": "clapp-2", "scripts": {"test": "jest"}}
+```
+
+- `node(ast, path)` — the addressed node; `has(ast, path)` — whether the path exists (a missing key, a missing index and a path through a scalar return `false`, only invalid segments throw); `get(ast, path)` — plain JavaScript values (objects in document order, the last duplicate key wins, arrays, scalar `value`).
+- `set(ast, path, value)` — replaces an existing value. A scalar replaced by a scalar of the same type only rewrites its literal; any other replacement rebuilds the node, so `type()` describes the new value. A missing path is an error.
+- `add(ast, path, value)` — creates a value that must not exist yet. An object member is always appended after the existing members; an existing key is an error (use `set`). An array index must be in `0..length`, where `length` appends.
+- `delete(ast, path)` — removes an object member or an array element, cleans up the surrounding separator and normalises a container that becomes empty to `{}`/`[]`.
+
+Every untouched byte of the document stays intact. New text follows the style of the receiving container: a multiline container uses its own indentation and the line break of the document (CRLF when the container text already uses it, LF otherwise), a single-line container uses `, `, and an empty container receives the first value compactly. `pos()` is not recalculated: positions describe the original parse and `JsonAst.unparse` does not use them.
+
+Path failures throw `JsonAstPathError` with the whole `path` and the `segmentIndex` of the failing segment (`null` when the path itself is invalid). Values that are not JSON (`undefined`, a function, a symbol, a bigint, `NaN`, `Infinity`, a non-plain object) and circular references throw a plain `Error`.
+
 ### Errors
 
 - `parse` throws `Error` when the argument is not a string (`invalid JSON argument (expected type string)`) and on invalid JSON. A syntax error message starts with `parse: JSON parsing failure:`, carries `line`, `column` and `offset`, and includes the offending source line with a caret under the offending character (`packages/utils/src/json-ast/parse.ts:54`).
@@ -177,7 +208,7 @@ try {
 ### Boundaries
 
 - The grammar is strict JSON: no comments and no trailing commas. JSONC remains the job of `jsonc-parser` in `data-file` (`packages/utils/src/data-file/formats/json/json.ts:11`).
-- There is no `dump`, no coloured output, no CLI/`bin` and no AST query language. Editing is limited to `get`/`set` on attributes; there are no helpers for inserting or removing nodes.
+- There is no `dump`, no coloured output, no CLI/`bin` and no AST query language. Structural edits are limited to one existing value at a time through `JsonAstEditor` (`set`/`add`/`delete`): no moves or copies between documents, no bulk edits, no patch/diff.
 - The parser is an independent recursive descent implementation (`packages/utils/src/json-ast/parse.ts:78`). It uses no PEG/ASTy tooling and adds no dependencies: the runtime dependencies are still `jsonc-parser`, `object-path` and `yaml` (plus the `@orion76/logger` peer).
 - The lossless attribute model is inspired by [json-asty](https://github.com/rse/json-asty) 1.3.4 (MIT, Copyright © 2018-2026 Dr. Ralf S. Engelschall); the code is an independent implementation. The attribution is repeated in the module headers (`packages/utils/src/json-ast/json-ast.ts:10`, `parse.ts:5`, `node.ts:4`, `types.ts:4`).
 
@@ -189,7 +220,7 @@ npx tsc --noEmit -p packages/utils/tsconfig.tests.json
 npm run build:utils
 ```
 
-The `json-ast` suite lives in `packages/utils/tests/json-ast.test.ts` and covers round-trip, the AST shape, the `childs`/`child` contract and parse errors. The other `data-*` suites are currently red for a pre-existing reason after the `data-file/formats/**` refactor (tracked separately); a full package run is not green until that is fixed.
+The `json-ast` suites are `packages/utils/tests/json-ast.test.ts` (round-trip, the AST shape, the `childs`/`child` contract and parse errors) and `packages/utils/tests/json-ast-editor.test.ts` (reads, `set`/`add`/`delete`, formatting, CRLF, error paths and invariants). The other `data-*` suites are currently red for a pre-existing reason after the `data-file/formats/**` refactor (tracked separately); a full package run is not green until that is fixed.
 
 ## License
 
