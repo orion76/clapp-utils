@@ -24,7 +24,16 @@ export function decodeValue(node: JsonAstNode): unknown {
         continue;
       }
       const key = name.get('value');
-      result[typeof key === 'string' ? key : String(key)] = decodeValue(value);
+      const decoded = decodeValue(value);
+      // A plain assignment of the key `"__proto__"` would call the `Object.prototype`
+      // setter and turn the value into the prototype instead of an own property, so every
+      // key is defined explicitly: the result then matches `JSON.parse` for any key name.
+      Object.defineProperty(result, typeof key === 'string' ? key : String(key), {
+        value: decoded,
+        enumerable: true,
+        writable: true,
+        configurable: true,
+      });
     }
     return result;
   }

@@ -170,11 +170,54 @@ export function prepareContainerForInsert(container: JsonAstNode): ContainerStyl
 }
 
 /**
+ * Node that holds the text after the content of a child: the value of a `member` (a member
+ * itself carries no text of its own), the node itself for an array element or a scalar.
+ */
+function contentEnd(node: JsonAstNode): JsonAstNode {
+  if (node.type() !== 'member') {
+    return node;
+  }
+  const value = node.child(1);
+  return value === null ? node : value;
+}
+
+/**
+ * Cut the text that belongs to the document after a container's closing bracket off its
+ * `epilog` and return it.
+ *
+ * The parser stores a container `epilog` as `ws? <closing bracket> ws?`, so the whitespace
+ * after the bracket sits at the end of the same `epilog`. Appending a separator to that
+ * `epilog` would place it after the layout text instead of right after the content: the cut
+ * text goes to the `epilog` of the new last child, which keeps it in the same place in the
+ * document.
+ *
+ * @returns the text after the closing bracket; `''` for a scalar or a container without one
+ */
+function takeOutsideSuffix(node: JsonAstNode): string {
+  if (!isContainer(node)) {
+    return '';
+  }
+  const suffix = outsideSuffix(node);
+  if (suffix === '') {
+    return '';
+  }
+  const epilog = attribute(node, 'epilog');
+  node.set('epilog', epilog.slice(0, epilog.length - suffix.length));
+  return suffix;
+}
+
+/**
  * Append a detached node to a container and place the separator.
  *
  * The separator goes into the `epilog` of the previous child, so the new child closes the
  * container; an empty container receives its first child compactly. Only the end of a
  * container is supported: the editor API no longer inserts into the middle.
+ *
+ * A previous child that ends with a container keeps the text after its closing bracket in
+ * the container `epilog`; that text is moved to the `epilog` of the new last child, so the
+ * separator follows the closing bracket directly and the layout stays around the container
+ * (for a member the trailing text lives in its value node). Scalars are unaffected: they
+ * have no text after their content in the `epilog`.
  */
 export function appendChild(container: JsonAstNode, child: JsonAstNode, style: ContainerStyle): void {
   const children = container.childs();
@@ -183,7 +226,11 @@ export function appendChild(container: JsonAstNode, child: JsonAstNode, style: C
     return;
   }
   const previous = children[children.length - 1];
+  const suffix = takeOutsideSuffix(contentEnd(previous));
   previous.set('epilog', attribute(previous, 'epilog') + style.separator);
+  if (suffix !== '') {
+    child.set('epilog', attribute(child, 'epilog') + suffix);
+  }
   insertChild(container, children.length, child);
 }
 
