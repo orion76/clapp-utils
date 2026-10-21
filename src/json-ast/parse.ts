@@ -1,12 +1,15 @@
 /**
- * Lossless JSON parser: recursive descent over a strict JSON grammar.
+ * Lossless JSON/JSONC parser: recursive descent over the JSON grammar extended with
+ * JSONC comments and trailing commas.
  *
  * Every node keeps the raw text of the document in its attributes, so `JsonAst.unparse`
  * reproduces the input byte for byte. The lossless attribute model is inspired by
  * json-asty 1.3.4 (https://github.com/rse/json-asty, MIT, Copyright (c) 2018-2026
  * Dr. Ralf S. Engelschall); the parser below is an independent implementation.
  *
- * The grammar is strict JSON: no comments and no trailing commas.
+ * Comments are not modelled as nodes: they stay inside the raw text around values
+ * (`prolog`/`epilog` and the `epilog` of a member key), so the round trip stays exact.
+ * Trailing commas are allowed in objects and arrays, as in JSONC.
  */
 import { createNode } from './node';
 import type { AstNodePos, JsonAstNode, JsonAstNodeType } from './types';
@@ -33,11 +36,11 @@ const HEX_DIGIT = /^[0-9a-fA-F]$/;
 const EXCERPT_MAX_WIDTH = 80;
 
 /**
- * Parse JSON text into the lossless AST.
+ * Parse JSON/JSONC text into the lossless AST.
  *
- * @param json - JSON document
+ * @param json - JSON or JSONC document
  * @returns the root node of the AST
- * @throws {Error} when the argument is not a string, or when the text is not valid JSON
+ * @throws {Error} when the argument is not a string, or when the text is not valid JSON/JSONC
  * (the message carries the position and a source excerpt of the failure)
  */
 export function parseJsonAst(json: string): JsonAstNode {
@@ -86,10 +89,11 @@ class JsonParser {
   }
 
   /**
-   * Parse the document: `ws? value ws? eof`.
+   * Parse the document: `trivia? value trivia? eof`.
    *
-   * The leading whitespace is prefixed to the `prolog` of the root node, the trailing
-   * whitespace is appended to its `epilog`, exactly as the lossless model prescribes.
+   * The leading trivia (whitespace and comments) is prefixed to the `prolog` of the root
+   * node, the trailing trivia is appended to its `epilog`, exactly as the lossless model
+   * prescribes.
    */
   parseDocument(): JsonAstNode {
     const prolog = this.readWhitespace();
@@ -108,7 +112,7 @@ class JsonParser {
     return value;
   }
 
-  /** Parse `ws? "{" ws?` (`member` (`ws? "," ws?` `member`)*)? `ws? "}" ws?`. */
+  /** Parse `trivia? "{" trivia?` (`member` (`trivia? "," trivia?` `member`)*)? `trivia? "}" trivia?`. */
   private parseObject(): JsonAstNode {
     const pos = this.position();
     const prologBegin = this.offset;
@@ -122,6 +126,10 @@ class JsonParser {
         const separator = this.readSeparator();
         const previous = members[members.length - 1];
         previous.set('epilog', this.readAttribute(previous, 'epilog') + separator);
+        // A trailing comma closes the list: its separator stays in the previous epilog.
+        if (this.peek() === '}') {
+          break;
+        }
         members.push(this.parseMember());
       }
     }
@@ -129,7 +137,7 @@ class JsonParser {
     return createNode('object', pos, { prolog, epilog }, members);
   }
 
-  /** Parse `ws? "[" ws?` (`value` (`ws? "," ws?` `value`)*)? `ws? "]" ws?`. */
+  /** Parse `trivia? "[" trivia?` (`value` (`trivia? "," trivia?` `value`)*)? `trivia? "]" trivia?`. */
   private parseArray(): JsonAstNode {
     const pos = this.position();
     const prologBegin = this.offset;
@@ -143,6 +151,10 @@ class JsonParser {
         const separator = this.readSeparator();
         const previous = values[values.length - 1];
         previous.set('epilog', this.readAttribute(previous, 'epilog') + separator);
+        // A trailing comma closes the list: its separator stays in the previous epilog.
+        if (this.peek() === ']') {
+          break;
+        }
         values.push(this.parseValue());
       }
     }
@@ -150,7 +162,7 @@ class JsonParser {
     return createNode('array', pos, { prolog, epilog }, values);
   }
 
-  /** Parse a member: a string key, `ws? ":" ws?` (stored in the key `epilog`) and a value. */
+  /** Parse a member: a string key, `trivia? ":" trivia?` (stored in the key `epilog`) and a value. */
   private parseMember(): JsonAstNode {
     const pos = this.position();
     const name = this.parseString();
@@ -304,7 +316,7 @@ class JsonParser {
     return createNode(type, pos, { body: literal, value });
   }
 
-  /** Read `ws? "}" ws?` (or the given closing bracket) as the `epilog` of a container. */
+  /** Read `trivia? "}" trivia?` (or the given closing bracket) as the `epilog` of a container. */
   private readEpilog(closing: string): string {
     const begin = this.offset;
     this.readWhitespace();
@@ -313,7 +325,7 @@ class JsonParser {
     return this.json.slice(begin, this.offset);
   }
 
-  /** Read `ws? "," ws?` — the separator appended to the epilog of the previous element. */
+  /** Read `trivia? "," trivia?` — the separator appended to the epilog of the previous element. */
   private readSeparator(): string {
     const begin = this.offset;
     this.readWhitespace();
@@ -322,26 +334,114 @@ class JsonParser {
     return this.json.slice(begin, this.offset);
   }
 
-  /** Check whether a comma follows the current position, whitespace ignored. */
+  /** Check whether a comma follows the current position, whitespace and comments ignored. */
   private separatorAhead(): boolean {
-    let offset = this.offset;
-    while (offset < this.json.length && WHITESPACE.has(this.json.charAt(offset))) {
-      offset += 1;
-    }
-    return this.json.charAt(offset) === ',';
+    return this.json.charAt(this.triviaEnd(this.offset)) === ',';
   }
 
-  /** Read and consume the run of JSON whitespace at the current position. */
+  /**
+   * Read and consume the run of JSON whitespace and JSONC comments at the current position.
+   *
+   * Comments are kept as text: the caller slices the consumed range into a `prolog` or
+   * `epilog`, so they survive the round trip without being modelled as nodes.
+   */
   private readWhitespace(): string {
     const begin = this.offset;
     for (;;) {
       const char = this.peek();
-      if (char === undefined || !WHITESPACE.has(char)) {
+      if (char === undefined) {
         break;
+      }
+      if (WHITESPACE.has(char)) {
+        this.step();
+        continue;
+      }
+      if (char === '/' && this.peek(1) === '/') {
+        this.skipLineComment();
+        continue;
+      }
+      if (char === '/' && this.peek(1) === '*') {
+        this.skipBlockComment();
+        continue;
+      }
+      break;
+    }
+    return this.json.slice(begin, this.offset);
+  }
+
+  /** Consume a `//` comment up to (but not including) the line break or the end of input. */
+  private skipLineComment(): void {
+    this.step();
+    this.step();
+    for (;;) {
+      const char = this.peek();
+      if (char === undefined || char === '\n' || char === '\r') {
+        return;
       }
       this.step();
     }
-    return this.json.slice(begin, this.offset);
+  }
+
+  /**
+   * Consume a block comment.
+   *
+   * @throws {Error} when the comment is not closed; the error points at its start
+   */
+  private skipBlockComment(): void {
+    const pos = this.position();
+    this.step();
+    this.step();
+    for (;;) {
+      const char = this.peek();
+      if (char === undefined) {
+        throw new Error(formatParseError(this.json, pos, 'unterminated block comment'));
+      }
+      if (char === '*' && this.peek(1) === '/') {
+        this.step();
+        this.step();
+        return;
+      }
+      this.step();
+    }
+  }
+
+  /**
+   * Offset of the first character at or after `offset` that is neither whitespace nor
+   * part of a comment. The comments are not validated here: an unterminated block comment
+   * is reported by {@link readWhitespace}, which owns the parsing position.
+   */
+  private triviaEnd(offset: number): number {
+    let current = offset;
+    for (;;) {
+      const char = current < this.json.length ? this.json.charAt(current) : undefined;
+      if (char === undefined) {
+        return current;
+      }
+      if (WHITESPACE.has(char)) {
+        current += 1;
+        continue;
+      }
+      if (char === '/' && this.json.charAt(current + 1) === '/') {
+        current += 2;
+        while (current < this.json.length) {
+          const inner = this.json.charAt(current);
+          if (inner === '\n' || inner === '\r') {
+            break;
+          }
+          current += 1;
+        }
+        continue;
+      }
+      if (char === '/' && this.json.charAt(current + 1) === '*') {
+        const close = this.json.indexOf('*/', current + 2);
+        if (close === -1) {
+          return current;
+        }
+        current = close + 2;
+        continue;
+      }
+      return current;
+    }
   }
 
   /** Consume the expected character or fail with its position. */

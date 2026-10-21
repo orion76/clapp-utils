@@ -1,4 +1,3 @@
-import { type Node } from 'jsonc-parser';
 /**
  * Supported data file formats, selected by the file extension.
  */
@@ -22,9 +21,3 @@ export interface IJsonObject {
   [key: string]: JsonValue | undefined;
 }
 export interface IJsonArray extends Array<JsonValue> {}
-
-
-type TInsertionPointNotFound = { found: true; node: Node };
-type TInsertionPointFound = { found: false; parent: Node; segment: TPathSegment; remaining: TPathSegment[] };
-
-export type UInsertionPoint = TInsertionPointFound | TInsertionPointNotFound;

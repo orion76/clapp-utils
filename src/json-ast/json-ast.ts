@@ -4,8 +4,8 @@
  * Every node of the tree keeps the raw text it was parsed from, so unparsing an AST
  * reproduces the original document byte by byte: whitespace, indentation, key order,
  * duplicate keys, number spelling (`42.0`, `1e+10`) and string escaping all survive the
- * round trip. The grammar is strict JSON — unlike JSONC it allows no comments and no
- * trailing commas.
+ * round trip. The grammar is JSON extended with JSONC comments (`//` and block comments)
+ * and trailing commas; comments are kept as raw text around values, not as nodes.
  *
  * The lossless attribute model is inspired by json-asty 1.3.4
  * (https://github.com/rse/json-asty, MIT, Copyright (c) 2018-2026 Dr. Ralf S. Engelschall);
@@ -22,11 +22,11 @@ import type { JsonAstNode } from './types';
  */
 export class JsonAst {
   /**
-   * Parse JSON text into an AST.
+   * Parse JSON/JSONC text into an AST.
    *
-   * @param json - JSON document
+   * @param json - JSON or JSONC document
    * @returns the root node of the lossless AST
-   * @throws {Error} when the argument is not a string, or when the text is not valid JSON
+   * @throws {Error} when the argument is not a string, or when the text is not valid JSON/JSONC
    * (the message carries the position and a source excerpt of the failure)
    */
   static parse(json: string): JsonAstNode {

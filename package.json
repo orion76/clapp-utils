@@ -39,7 +39,6 @@
     "@orion76/logger": "^0.0.2"
   },
   "dependencies": {
-    "jsonc-parser": "^3.3.1",
     "object-path": "^0.11.8",
     "yaml": "^2.9.1"
   },
