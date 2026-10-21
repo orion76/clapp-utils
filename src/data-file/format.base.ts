@@ -1,15 +1,14 @@
-import { loadFileContent, saveFileContent } from '../load';
-import { TDataPath } from '../types';
-import { IFileFormat } from './types';
+import { loadFileContent, saveFileContent } from "./load";
+import { IFileFormat, TObjectPath } from "./types";
 
 export abstract class FileBase implements IFileFormat {
   protected fileContent!: string;
 
   constructor(protected readonly filePath: string) {}
   protected abstract getDoc<T>(): T;
-  protected abstract getValue<T extends unknown = unknown>(dataPath: TDataPath): T | undefined;
-  protected abstract setValue(dataPath: TDataPath, value: unknown): boolean;
-  protected abstract deleteValue(dataPath: TDataPath): boolean;
+  protected abstract getValue<T extends unknown = unknown>(dataPath: TObjectPath): T | undefined;
+  protected abstract setValue(dataPath: TObjectPath, value: unknown): boolean;
+  protected abstract deleteValue(dataPath: TObjectPath): boolean;
   protected abstract getFileContent(): string;
 
   protected save(): Promise<boolean> {
@@ -17,18 +16,18 @@ export abstract class FileBase implements IFileFormat {
     return saveFileContent(this.filePath, fileContent);
   }
 
-  async get<T>(dataPath: TDataPath): Promise<T | undefined> {
+  async get<T>(dataPath: TObjectPath): Promise<T | undefined> {
     await this.load();
     return this.getValue<T>(dataPath);
   }
 
-  async set(dataPath: TDataPath, value: unknown): Promise<boolean> {
+  async set(dataPath: TObjectPath, value: unknown): Promise<boolean> {
     await this.setValue(dataPath, value);
 
     return this.save();
   }
 
-  async delete(dataPath: TDataPath): Promise<boolean> {
+  async delete(dataPath: TObjectPath): Promise<boolean> {
     await this.deleteValue(dataPath);
     return this.save();
   }

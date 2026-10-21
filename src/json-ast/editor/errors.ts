@@ -4,7 +4,10 @@
  * The class carries the path the caller passed and the index of the segment that made the
  * operation fail, so a caller can point at the exact level instead of parsing the message.
  */
-import type { JsonAstPath } from './types';
+
+import { JsonAstPath } from ".";
+import { TObjectPath } from "../../data-file/types";
+
 
 /**
  * Failure of a path based read or edit of a JSON AST.
@@ -14,7 +17,7 @@ import type { JsonAstPath } from './types';
  */
 export class JsonAstPathError extends Error {
   /** Path the failed operation was called with (a copy, safe to keep). */
-  readonly path: JsonAstPath;
+  readonly path: TObjectPath;
 
   /**
    * Index of the failing segment inside {@link path}; `null` when the path itself is

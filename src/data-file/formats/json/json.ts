@@ -8,13 +8,14 @@
  * Value handling follows the JSON grammar: strings, numbers, booleans, `null`, arrays and
  * objects. `undefined` is not a JSON value and is rejected.
  */
-import { JsonAst, JsonAstEditor, JsonAstPathError } from '../../../json-ast';
 import type { JsonAstNode, JsonAstPath, JsonAstPathSegment } from '../../../json-ast';
+import { JsonAst, JsonAstEditor, JsonAstPathError } from '../../../json-ast';
 import { JsonDataError } from '../../errors';
+import { FileBase } from '../../format.base';
 import { escapePath } from '../../path';
-import { TDataPath } from '../../types';
-import { FileBase } from '../file.base';
-import { IFileFormat } from '../types';
+
+
+import { IFileFormat, TObjectPath } from '../../types';
 
 /** Canonical non-negative decimal integer, accepted as an array index. */
 const CANONICAL_INDEX = /^(0|[1-9][0-9]*)$/;
@@ -22,10 +23,10 @@ const CANONICAL_INDEX = /^(0|[1-9][0-9]*)$/;
 /**
  * Copy a read-only data path into the mutable path type the AST editor accepts.
  *
- * `TDataPath` is readonly while `JsonAstPath` is mutable; copying keeps the public
+ * `TObjectPath` is readonly while `JsonAstPath` is mutable; copying keeps the public
  * `json-ast` API unchanged and the data path untouched.
  */
-function toAstPath(dataPath: TDataPath): JsonAstPath {
+function toAstPath(dataPath: TObjectPath): JsonAstPath {
   return [...dataPath];
 }
 
@@ -51,7 +52,7 @@ function parseOrThrow(fileContent: string): JsonAstNode {
  * `JsonAstPathError` carries the path context of the failing segment; a plain error (an
  * invalid value, for example) is passed through as a `JsonDataError` with its message.
  */
-function toDataError(dataPath: TDataPath, error: unknown): Error {
+function toDataError(dataPath: TObjectPath, error: unknown): Error {
   if (error instanceof JsonDataError) {
     return error;
   }
@@ -169,7 +170,7 @@ export class JsonFile extends FileBase implements IFileFormat {
     return this._ast as T;
   }
 
-  protected getValue<T extends unknown = unknown>(dataPath: TDataPath): T | undefined {
+  protected getValue<T extends unknown = unknown>(dataPath: TObjectPath): T | undefined {
     const ast = this.getDoc<JsonAstNode>();
     const editor = new JsonAstEditor(ast);
     const path = toAstPath(dataPath);
@@ -183,7 +184,7 @@ export class JsonFile extends FileBase implements IFileFormat {
     }
   }
 
-  protected setValue(dataPath: TDataPath, value: unknown): boolean {
+  protected setValue(dataPath: TObjectPath, value: unknown): boolean {
     if (value === undefined) {
       throw new JsonDataError('Value "undefined" is not a JSON value');
     }
@@ -197,7 +198,7 @@ export class JsonFile extends FileBase implements IFileFormat {
     return true;
   }
 
-  protected deleteValue(dataPath: TDataPath): boolean {
+  protected deleteValue(dataPath: TObjectPath): boolean {
     const ast = this.getDoc<JsonAstNode>();
     const editor = new JsonAstEditor(ast);
     try {
@@ -221,7 +222,7 @@ export class JsonFile extends FileBase implements IFileFormat {
  * @returns the value at the path, `undefined` when the path does not exist
  * @throws {JsonDataError} when the content is not valid JSON/JSONC or the path is invalid
  */
-export function getJsonValue(fileContent: string, dataPath: TDataPath): unknown {
+export function getJsonValue(fileContent: string, dataPath: TObjectPath): unknown {
   const ast = parseOrThrow(fileContent);
   const editor = new JsonAstEditor(ast);
   const path = toAstPath(dataPath);
@@ -246,7 +247,7 @@ export function getJsonValue(fileContent: string, dataPath: TDataPath): unknown 
  * @throws {JsonDataError} when the content is not valid JSON/JSONC, the path is invalid or
  * crosses a scalar value, or the value is not JSON-compatible
  */
-export function setJsonValue(fileContent: string, dataPath: TDataPath, value: unknown): string {
+export function setJsonValue(fileContent: string, dataPath: TObjectPath, value: unknown): string {
   if (value === undefined) {
     throw new JsonDataError('Value "undefined" is not a JSON value');
   }
@@ -271,7 +272,7 @@ export function setJsonValue(fileContent: string, dataPath: TDataPath, value: un
  * @throws {JsonDataError} when the content is not valid JSON/JSONC, the path is invalid or
  * crosses a scalar value, or the value is not JSON-compatible
  */
-export function addJsonValue(fileContent: string, dataPath: TDataPath, value: unknown): string {
+export function addJsonValue(fileContent: string, dataPath: TObjectPath, value: unknown): string {
   if (value === undefined) {
     throw new JsonDataError('Value "undefined" is not a JSON value');
   }

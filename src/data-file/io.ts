@@ -10,7 +10,8 @@ import path from 'path';
 
 import { DataAccessError } from './errors';
 import { createFile } from './file-factory';
-import { TDataPath, UDataFormat } from './types';
+import { TObjectPath, UDataFormat } from './types';
+
 
 /**
  * Detect the data format for a file path from its extension.
@@ -54,7 +55,7 @@ function writeFile(filePath: string, content: string): void {
   }
 }
 
-function withContext(action: () => unknown, filePath: string, dataPath: TDataPath): unknown {
+function withContext(action: () => unknown, filePath: string, dataPath: TObjectPath): unknown {
   try {
     return action();
   } catch (error) {
@@ -70,7 +71,7 @@ function describeTry(filePath: string): string {
   return `Failed to access value in data file "${filePath}"`;
 }
 
-function stringifyDataPath(dataPath: TDataPath): string {
+function stringifyDataPath(dataPath: TObjectPath): string {
   return `[${dataPath.map(String).join(', ')}]`;
 }
 
@@ -83,7 +84,7 @@ function stringifyDataPath(dataPath: TDataPath): string {
  * @throws {DataAccessError} when the file is not readable, the format is
  * unsupported, the content is invalid or the path is invalid
  */
-export function readValue(filePath: string, dataPath: TDataPath): unknown {
+export function readValue(filePath: string, dataPath: TObjectPath): unknown {
   return withContext(
     () => {
       const file = createFile(filePath);
@@ -104,7 +105,7 @@ export function readValue(filePath: string, dataPath: TDataPath): unknown {
  * @throws {DataAccessError} when the file is not readable/writable, the format
  * is unsupported, the content is invalid or the path is invalid
  */
-export function writeValue(filePath: string, dataPath: TDataPath, value: unknown): void {
+export function writeValue(filePath: string, dataPath: TObjectPath, value: unknown): void {
   withContext(
     () => {
       const file = createFile(filePath);
@@ -125,7 +126,7 @@ export function writeValue(filePath: string, dataPath: TDataPath, value: unknown
  * @throws {DataAccessError} when the file is not readable/writable, the format
  * is unsupported, the content is invalid or the path is invalid
  */
-export function addValue(filePath: string, dataPath: TDataPath, value: unknown): void {
+export function addValue(filePath: string, dataPath: TObjectPath, value: unknown): void {
   withContext(
     () => {
       const file = createFile(filePath);
@@ -136,7 +137,7 @@ export function addValue(filePath: string, dataPath: TDataPath, value: unknown):
   );
 }
 
-export function deleteValue(filePath: string, dataPath: TDataPath): void {
+export function deleteValue(filePath: string, dataPath: TObjectPath): void {
   withContext(
     () => {
       const file = createFile(filePath);

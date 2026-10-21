@@ -16,7 +16,8 @@
  * Quoted content (`["..."]` or `['...']`) is unquoted to the raw key value.
  */
 
-import { TDataPath, TPathSegment } from './types';
+import { TObjectPath, TObjectPathSegment } from "./types";
+
 
 const IDENTIFIER_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
@@ -32,11 +33,11 @@ const IDENTIFIER_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
  * @param segments - path segments
  * @returns data path string, e.g. `a.b.[0]` or `["a.b"].c`
  */
-export function escapePath(segments: TDataPath): string {
+export function escapePath(segments: TObjectPath): string {
   return Array.from(segments, (segment) => escapeSegment(segment)).join('.');
 }
 
-function escapeSegment(segment: TPathSegment): string {
+function escapeSegment(segment: TObjectPathSegment): string {
   if (typeof segment === 'number') {
     return `[${segment}]`;
   }

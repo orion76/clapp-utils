@@ -4,9 +4,12 @@
  * A path is validated once (`validatePath`) and then walked (`resolveSegments`), so every
  * public operation shares the same segment rules and the same errors.
  */
+import { JsonAstPath, JsonAstPathSegment } from '.';
+import { TObjectPathSegment } from '../../data-file/types';
 import type { JsonAstNode } from '../types';
 import { JsonAstPathError } from './errors';
-import type { JsonAstPath, JsonAstPathSegment, Slot } from './types';
+import { Slot } from './types';
+
 
 /** Canonical non-negative decimal integer, accepted as an array index. */
 const CANONICAL_INDEX = /^(0|[1-9][0-9]*)$/;
@@ -181,7 +184,7 @@ export function segmentKey(segment: JsonAstPathSegment): string {
  * @returns the index
  * @throws {JsonAstPathError} when a string segment is not a canonical decimal integer
  */
-export function arrayIndex(segment: JsonAstPathSegment, segmentIndex: number, path: JsonAstPath): number {
+export function arrayIndex(segment: TObjectPathSegment, segmentIndex: number, path: JsonAstPath): number {
   if (typeof segment === 'number') {
     return segment;
   }

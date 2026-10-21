@@ -7,9 +7,10 @@
  */
 import { isMap, isScalar, isSeq, parseDocument, type Document } from 'yaml';
 import { YamlDataError } from '../../errors';
-import { TDataPath } from '../../types';
-import { FileBase } from '../file.base';
-import { IFileFormat } from '../types';
+
+
+import { FileBase } from '../../format.base';
+import { IFileFormat, TObjectPath } from '../../types';
 
 export class YamlFile extends FileBase implements IFileFormat {
   private _doc!: Document;
@@ -24,13 +25,13 @@ export class YamlFile extends FileBase implements IFileFormat {
     }
     return this._doc as T;
   }
-  protected getValue<T extends unknown = unknown>(dataPath: TDataPath): T | undefined {
+  protected getValue<T extends unknown = unknown>(dataPath: TObjectPath): T | undefined {
     const doc = this.getDoc<Document>();
     const node = doc.getIn(dataPath, true);
     const value = node === undefined ? node : nodeToValue(node, doc);
     return value as T;
   }
-  protected setValue(dataPath: TDataPath, value: unknown): boolean {
+  protected setValue(dataPath: TObjectPath, value: unknown): boolean {
     const doc = this.getDoc<Document>();
 
     if (value === undefined) {
@@ -47,7 +48,7 @@ export class YamlFile extends FileBase implements IFileFormat {
     }
     return true;
   }
-  protected deleteValue(dataPath: TDataPath): boolean {
+  protected deleteValue(dataPath: TObjectPath): boolean {
     const doc = this.getDoc<Document>();
     try {
       doc.deleteIn(dataPath);
@@ -75,6 +76,6 @@ function nodeToValue(node: unknown, doc: Document): unknown {
   return node;
 }
 
-function stringifyPath(path: TDataPath): string {
+function stringifyPath(path: TObjectPath): string {
   return Array.isArray(path) ? `[${path.map(String).join(', ')}]` : '';
 }

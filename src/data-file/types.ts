@@ -1,23 +1,16 @@
-/**
- * Supported data file formats, selected by the file extension.
- */
-export type UDataFormat = 'json' | 'yaml';
-
-/**
- * One segment of a data path: an object key (string) or an array index (number).
- */
-export type TPathSegment = string | number;
-
-/**
- * Parsed data path, a sequence of object keys and array indexes.
- */
-export type TDataPath = readonly TPathSegment[];
-
-/**
- * JSON-compatible value as returned by `getJsonValue`.
- */
-export type JsonValue = string | number | boolean | null | IJsonObject | IJsonArray;
-export interface IJsonObject {
-  [key: string]: JsonValue | undefined;
+export interface IFileFormat {
+  get<T extends unknown = unknown>(dataPath: TObjectPath): Promise<T | T[] | undefined>;
+  set(dataPath: TObjectPath, value: unknown): Promise<boolean>;
+  delete(dataPath: TObjectPath): Promise<boolean>;
 }
-export interface IJsonArray extends Array<JsonValue> {}
+
+/**
+ * One segment of a path into a parsed JSON document.
+ *
+ * A string addresses an object key as is. A number addresses an array index and, on an
+ * object, the key `String(number)` — the same rule the `data-file` path parser uses, so
+ * paths stay structurally compatible with `TObjectPath`.
+ */
+export type TObjectPathSegment = string | number;
+export type TObjectPath = TObjectPathSegment[];
+export type UDataFormat = 'json' | 'yaml';

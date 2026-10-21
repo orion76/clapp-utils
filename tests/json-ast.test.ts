@@ -62,6 +62,7 @@ describe('json-ast', () => {
       '[\n]',
       '{ \n\t }',
       '[1,2,3]',
+      '[1,]',
       '{"a":1,"b":2}',
       '[1, 2,   3 ,4]',
       '{"a":1,"a":2}',
@@ -293,7 +294,6 @@ describe('json-ast', () => {
       ['01', 1, 2, 1, '01'],
       ['1.', 1, 3, 2, '1.'],
       ['{"a":}', 1, 6, 5, '{"a":}'],
-      ['[1,]', 1, 4, 3, '[1,]'],
       ['tru', 1, 4, 3, 'tru'],
       ['"abc', 1, 5, 4, '"abc'],
       ['1 x', 1, 3, 2, '1 x'],
@@ -332,7 +332,7 @@ describe('json-ast', () => {
 
     it('has no PEG/ASTy or CLI dependency in packages/utils/package.json', () => {
       const packageJson = readUtilsPackageJson();
-      expect(Object.keys(packageJson.dependencies ?? {}).sort()).toEqual(['jsonc-parser', 'object-path', 'yaml']);
+      expect(Object.keys(packageJson.dependencies ?? {}).sort()).toEqual(['object-path', 'yaml']);
     });
   });
 });
