@@ -181,29 +181,27 @@ function contentEnd(node: JsonAstNode): JsonAstNode {
   return value === null ? node : value;
 }
 
+/** Trailing layout of a child `epilog`: spaces, tabs and line breaks at its end. */
+const TRAILING_LAYOUT = /[ \t\r\n]+$/;
+
 /**
- * Cut the text that belongs to the document after a container's closing bracket off its
- * `epilog` and return it.
+ * Cut the trailing layout (spaces, tabs, line breaks) off a node `epilog` and return it.
  *
- * The parser stores a container `epilog` as `ws? <closing bracket> ws?`, so the whitespace
- * after the bracket sits at the end of the same `epilog`. Appending a separator to that
- * `epilog` would place it after the layout text instead of right after the content: the cut
- * text goes to the `epilog` of the new last child, which keeps it in the same place in the
- * document.
+ * The parser stores the text after a container's closing bracket (`ws? <bracket> ws?`) in
+ * the same `epilog`, and a previous append may have moved layout text into the `epilog` of
+ * a scalar or a member. Either way the layout has to leave the `epilog` before a separator
+ * is appended, otherwise the separator would follow the layout instead of the content.
  *
- * @returns the text after the closing bracket; `''` for a scalar or a container without one
+ * @returns the cut layout text; `''` when the `epilog` does not end with layout
  */
-function takeOutsideSuffix(node: JsonAstNode): string {
-  if (!isContainer(node)) {
-    return '';
-  }
-  const suffix = outsideSuffix(node);
-  if (suffix === '') {
-    return '';
-  }
+function takeTrailingLayout(node: JsonAstNode): string {
   const epilog = attribute(node, 'epilog');
-  node.set('epilog', epilog.slice(0, epilog.length - suffix.length));
-  return suffix;
+  const trimmed = epilog.replace(TRAILING_LAYOUT, '');
+  if (trimmed === epilog) {
+    return '';
+  }
+  node.set('epilog', trimmed);
+  return epilog.slice(trimmed.length);
 }
 
 /**
@@ -213,11 +211,11 @@ function takeOutsideSuffix(node: JsonAstNode): string {
  * container; an empty container receives its first child compactly. Only the end of a
  * container is supported: the editor API no longer inserts into the middle.
  *
- * A previous child that ends with a container keeps the text after its closing bracket in
- * the container `epilog`; that text is moved to the `epilog` of the new last child, so the
- * separator follows the closing bracket directly and the layout stays around the container
- * (for a member the trailing text lives in its value node). Scalars are unaffected: they
- * have no text after their content in the `epilog`.
+ * The trailing layout of the previous child (the whitespace after a container closing
+ * bracket, a line break transferred by an earlier append, or the text after a member value)
+ * moves to the `epilog` of the new last child in the same order, so it keeps its place in
+ * the document and the separator is written right after the content. A `member` can carry
+ * layout both in its value node and in its own `epilog`, so both are cut.
  */
 export function appendChild(container: JsonAstNode, child: JsonAstNode, style: ContainerStyle): void {
   const children = container.childs();
@@ -226,10 +224,13 @@ export function appendChild(container: JsonAstNode, child: JsonAstNode, style: C
     return;
   }
   const previous = children[children.length - 1];
-  const suffix = takeOutsideSuffix(contentEnd(previous));
+  let layout = takeTrailingLayout(contentEnd(previous));
+  if (previous.type() === 'member') {
+    layout += takeTrailingLayout(previous);
+  }
   previous.set('epilog', attribute(previous, 'epilog') + style.separator);
-  if (suffix !== '') {
-    child.set('epilog', attribute(child, 'epilog') + suffix);
+  if (layout !== '') {
+    child.set('epilog', attribute(child, 'epilog') + layout);
   }
   insertChild(container, children.length, child);
 }
