@@ -55,21 +55,34 @@ import { assertJsonValue, decodeValue, isContainerValue } from './value';
 /**
  * Reads and formatting-preserving edits of a lossless JSON AST by path.
  *
- * All methods are static: the editor holds no state and works on the tree in place.
+ * An editor is created over a tree produced by `JsonAst.parse` and keeps it in a private
+ * field; every method reads or changes that tree in place, so the instance holds no other
+ * state and `JsonAst.unparse` renders the result after each change.
  */
 export class JsonAstEditor {
+  private readonly _ast: JsonAstNode;
+
+  /**
+   * Create an editor over an existing tree.
+   *
+   * @param ast - root node produced by `JsonAst.parse`; the editor reads and edits this
+   * tree in place
+   */
+  constructor(ast: JsonAstNode) {
+    this._ast = ast;
+  }
+
   /**
    * Get the node addressed by a path.
    *
-   * @param ast - root node produced by `JsonAst.parse`
    * @param path - object keys and array indexes; an empty path addresses the root
    * @returns the addressed node: the value node of an object member, the element of an
    * array or the root node itself
    * @throws {JsonAstPathError} when the path is not an array, a segment is invalid, a key
    * or an index does not exist, or the path runs through a scalar value
    */
-  static node(ast: JsonAstNode, path: JsonAstPath): JsonAstNode {
-    return resolveSlot(ast, path).node;
+  node(path: JsonAstPath): JsonAstNode {
+    return resolveSlot(this._ast, path).node;
   }
 
   /**
@@ -78,14 +91,13 @@ export class JsonAstEditor {
    * A missing key, a missing index and a path running through a scalar value all yield
    * `false` instead of an error; only invalid segments throw.
    *
-   * @param ast - root node produced by `JsonAst.parse`
    * @param path - object keys and array indexes; an empty path always exists
    * @returns `true` when the whole path exists
    * @throws {JsonAstPathError} when the path is not an array or a segment is invalid
    */
-  static has(ast: JsonAstNode, path: JsonAstPath): boolean {
+  has(path: JsonAstPath): boolean {
     const segments = validatePath(path);
-    let node = ast;
+    let node = this._ast;
     for (let index = 0; index < segments.length; index += 1) {
       const segment = segments[index];
       const type = node.type();
@@ -126,14 +138,13 @@ export class JsonAstEditor {
    * become arrays and scalars become their decoded `value`; raw `prolog`/`body`/`epilog`
    * text is never exposed.
    *
-   * @param ast - root node produced by `JsonAst.parse`
    * @param path - object keys and array indexes; an empty path returns the whole document
    * @returns the decoded JavaScript value
    * @throws {JsonAstPathError} when the path is not an array, a segment is invalid, a key
    * or an index does not exist, or the path runs through a scalar value
    */
-  static get(ast: JsonAstNode, path: JsonAstPath): unknown {
-    return decodeValue(resolveSlot(ast, path).node);
+  get(path: JsonAstPath): unknown {
+    return decodeValue(resolveSlot(this._ast, path).node);
   }
 
   /**
@@ -148,7 +159,6 @@ export class JsonAstEditor {
    * Node positions are not recalculated: a built node carries the position of the node it
    * replaced.
    *
-   * @param ast - root node produced by `JsonAst.parse`
    * @param path - path of an existing value, never empty
    * @param value - JSON value to store: string, finite number, boolean, `null`, an array or
    * a plain object
@@ -157,11 +167,11 @@ export class JsonAstEditor {
    * @throws {Error} when the value is not a JSON value (`undefined`, a function, a symbol, a
    * bigint, `NaN`, `Infinity`, a non-plain object) or contains a circular reference
    */
-  static set(ast: JsonAstNode, path: JsonAstPath, value: unknown): void {
+  set(path: JsonAstPath, value: unknown): void {
     const segments = validatePath(path);
     assertMutationPath(segments, path);
     assertJsonValue(value);
-    const slot = resolveSegments(ast, segments, path);
+    const slot = resolveSegments(this._ast, segments, path);
     const container = slot.container;
     if (container === null) {
       throw rootPathError(path);
@@ -210,7 +220,6 @@ export class JsonAstEditor {
    * and separator style. Node positions are not recalculated: a built node carries the
    * position of the receiving container.
    *
-   * @param ast - root node produced by `JsonAst.parse`
    * @param path - path of the new element: keys of the parent plus the new key or index
    * @param value - JSON value to insert: string, finite number, boolean, `null`, an array or
    * a plain object, nested values included
@@ -218,11 +227,11 @@ export class JsonAstEditor {
    * is a scalar, the object key already exists or the array index is out of range
    * @throws {Error} when the value is not a JSON value or contains a circular reference
    */
-  static add(ast: JsonAstNode, path: JsonAstPath, value: unknown): void {
+  add(path: JsonAstPath, value: unknown): void {
     const segments = validatePath(path);
     assertMutationPath(segments, path);
     assertJsonValue(value);
-    const parent = resolveSegments(ast, segments.slice(0, -1), path).node;
+    const parent = resolveSegments(this._ast, segments.slice(0, -1), path).node;
     const segmentIndex = segments.length - 1;
     const segment = segments[segmentIndex];
     const type = parent.type();
@@ -231,7 +240,7 @@ export class JsonAstEditor {
       const key = segmentKey(segment);
       if (findMemberIndex(parent, key) !== -1) {
         throw new JsonAstPathError(
-          `key ${JSON.stringify(key)} already exists (use JsonAstEditor.set to replace an existing value)`,
+          `key ${JSON.stringify(key)} already exists (use set to replace an existing value)`,
           path,
           segmentIndex,
         );
@@ -273,15 +282,14 @@ export class JsonAstEditor {
    * that becomes empty is normalised to `{}` or `[]` (its inner whitespace is dropped, the
    * whitespace around it is kept). Node positions of the remaining nodes stay as parsed.
    *
-   * @param ast - root node produced by `JsonAst.parse`
    * @param path - path of an existing value, never empty
    * @throws {JsonAstPathError} when the path is empty or invalid, does not exist, or runs
    * through a scalar value
    */
-  static delete(ast: JsonAstNode, path: JsonAstPath): void {
+  delete(path: JsonAstPath): void {
     const segments = validatePath(path);
     assertMutationPath(segments, path);
-    const slot = resolveSegments(ast, segments, path);
+    const slot = resolveSegments(this._ast, segments, path);
     const container = slot.container;
     if (container === null) {
       throw rootPathError(path);
