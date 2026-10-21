@@ -4,12 +4,15 @@
  * `JsonAstEditor` works on a tree produced by `JsonAst.parse` and reads or changes one
  * value addressed by a path; `JsonAst.unparse` then renders the document. Reads decode the
  * addressed subtree into plain JavaScript values, edits touch only the affected node and
- * the separators around it, so the rest of the document stays byte for byte identical:
+ * the separators around it, so the rest of the document stays byte for byte identical.
  *
- * - `set` replaces an existing value and never creates one: a missing key or index is an
- *   error, use `add` to create a new element;
- * - `add` creates a new object key or array element and rejects an existing object key
- *   (that is what `set` is for);
+ * Operations: `node`, `has` and `get` read, `set`, `push` and `delete` edit the tree in
+ * place.
+ *
+ * - `set` writes a value and creates the address when it is missing: an object receives a
+ *   new key appended after its members, an array receives a new element at
+ *   `index === length` (a larger index is an error, use `push` to append);
+ * - `push` appends a value to the end of an existing array;
  * - `delete` removes an object member or an array element and keeps the surrounding
  *   separators and whitespace consistent.
  *
@@ -17,22 +20,22 @@
  * `String(number)`, an array accepts a number or a canonical decimal string
  * (`/^(0|[1-9][0-9]*)$/`). With duplicate object keys the last occurrence wins, exactly as
  * in `JSON.parse`. An empty path addresses the document root for reads and is rejected by
- * every mutation.
+ * every mutation except `push`, which accepts it when the root itself is an array.
  *
  * Node positions are never recalculated: `pos()` keeps the offsets of the original parse,
  * and nodes built by the editor carry the position of their anchor (the replaced node or
  * the receiving container). `JsonAst.unparse` does not use positions, so the text stays
  * exact.
  */
-import { insertChild, removeChild, replaceChild } from '../node';
+import { removeChild, replaceChild } from '../node';
 import type { JsonAstNode } from '../types';
 import { buildValue, createMember, scalarText, scalarType } from './build';
 import { JsonAstPathError } from './errors';
 import {
+  appendChild,
   attribute,
   buildStyleFor,
   containerStyle,
-  insertIntoContainer,
   keySeparator,
   normalizeContainer,
   outsidePrefix,
@@ -57,10 +60,11 @@ import { assertJsonValue, decodeValue, isContainerValue } from './value';
  *
  * An editor is created over a tree produced by `JsonAst.parse` and keeps it in a private
  * field; every method reads or changes that tree in place, so the instance holds no other
- * state and `JsonAst.unparse` renders the result after each change.
+ * state and `JsonAst.unparse` renders the result after each change. The operations are
+ * `node`, `has` and `get` for reads and `set`, `push` and `delete` for edits.
  */
 export class JsonAstEditor {
-  private readonly _ast: JsonAstNode;
+
 
   /**
    * Create an editor over an existing tree.
@@ -68,9 +72,7 @@ export class JsonAstEditor {
    * @param ast - root node produced by `JsonAst.parse`; the editor reads and edits this
    * tree in place
    */
-  constructor(ast: JsonAstNode) {
-    this._ast = ast;
-  }
+  constructor(private _ast: JsonAstNode) {}
 
   /**
    * Get the node addressed by a path.
@@ -148,22 +150,28 @@ export class JsonAstEditor {
   }
 
   /**
-   * Replace the existing value addressed by a path.
+   * Write a value at a path, replacing an existing value or creating a missing one.
    *
-   * A scalar replaced by another scalar of the same type only gets a new `body` and
-   * `value`, so the rest of the document stays byte for byte identical and the node keeps
-   * its parsed type. Any other pair (a scalar of another type, a scalar into a container, a
-   * container into a scalar, a container into another container) rebuilds the node and
-   * splices it into the parent, so `type()` reports the new value; the `prolog`/`epilog` of
-   * the replaced node are kept and the new text follows the style of the parent container.
-   * Node positions are not recalculated: a built node carries the position of the node it
-   * replaced.
+   * A missing address is created inside the existing parent: an object receives a new key
+   * appended after its members, an array receives a new element at `index === length` (a
+   * larger index is an error, use `push` to append). Intermediate segments are never
+   * created: the parent (`path` without the last segment) must exist and be an object or
+   * an array.
    *
-   * @param path - path of an existing value, never empty
+   * An existing value is replaced in one of two ways. A scalar replaced by another scalar
+   * of the same type only gets a new `body` and `value`, so the rest of the document stays
+   * byte for byte identical and the node keeps its parsed type. Any other pair (a scalar of
+   * another type, a scalar into a container, a container into a scalar, a container into
+   * another container) rebuilds the node and splices it into the parent, so `type()`
+   * reports the new value; the `prolog`/`epilog` of the replaced node are kept and the new
+   * text follows the style of the parent container. Node positions are not recalculated: a
+   * built node carries the position of the replaced node or of the receiving container.
+   *
+   * @param path - path of the value to write, never empty; the last segment may be new
    * @param value - JSON value to store: string, finite number, boolean, `null`, an array or
    * a plain object
-   * @throws {JsonAstPathError} when the path is empty, invalid or does not exist; when the
-   * path runs through a scalar value the target is missing as well
+   * @throws {JsonAstPathError} when the path is empty, invalid, its parent does not exist
+   * or is a scalar, or an array index is greater than the array length
    * @throws {Error} when the value is not a JSON value (`undefined`, a function, a symbol, a
    * bigint, `NaN`, `Infinity`, a non-plain object) or contains a circular reference
    */
@@ -171,12 +179,69 @@ export class JsonAstEditor {
     const segments = validatePath(path);
     assertMutationPath(segments, path);
     assertJsonValue(value);
-    const slot = resolveSegments(this._ast, segments, path);
-    const container = slot.container;
-    if (container === null) {
-      throw rootPathError(path);
+    const parent = resolveSegments(this._ast, segments.slice(0, -1), path).node;
+    const segmentIndex = segments.length - 1;
+    const segment = segments[segmentIndex];
+    const type = parent.type();
+
+    // The addressed value and the slot that holds it: an object member keeps the value in
+    // its second child, so the replacement happens inside the member, while an array
+    // element sits directly in the array.
+    let holder: JsonAstNode;
+    let slotIndex: number;
+    let target: JsonAstNode;
+
+    if (type === 'object') {
+      const key = segmentKey(segment);
+      const memberIndex = findMemberIndex(parent, key);
+      if (memberIndex === -1) {
+        const style = prepareContainerForInsert(parent);
+        const member = createMember(key, value, buildStyleFor(parent, style), keySeparator(parent), parent.pos());
+        appendChild(parent, member, style);
+        return;
+      }
+      const member = parent.child(memberIndex);
+      if (member === null) {
+        throw new JsonAstPathError(`the object member ${JSON.stringify(key)} has no node`, path, segmentIndex);
+      }
+      const memberValue = member.child(1);
+      if (memberValue === null) {
+        throw new JsonAstPathError(`the object member ${JSON.stringify(key)} has no value node`, path, segmentIndex);
+      }
+      holder = member;
+      slotIndex = 1;
+      target = memberValue;
+    } else if (type === 'array') {
+      const index = arrayIndex(segment, segmentIndex, path);
+      const length = parent.childs().length;
+      if (index === length) {
+        const style = prepareContainerForInsert(parent);
+        const element = buildValue(value, buildStyleFor(parent, style), parent.pos());
+        appendChild(parent, element, style);
+        return;
+      }
+      if (index > length) {
+        throw new JsonAstPathError(
+          `index ${index} is out of range for an array of length ${length} (use push to append)`,
+          path,
+          segmentIndex,
+        );
+      }
+      const element = parent.child(index);
+      if (element === null) {
+        throw new JsonAstPathError(`index ${index} has no value node`, path, segmentIndex);
+      }
+      holder = parent;
+      slotIndex = index;
+      target = element;
+    } else {
+      throw new JsonAstPathError(
+        `the parent path addresses a ${type} value (only an object or an array can receive a new element)`,
+        path,
+        segmentIndex,
+      );
     }
-    const target = slot.node;
+
     if (!isContainerValue(value) && target.type() === scalarType(value as string | number | boolean | null)) {
       target.set('body', scalarText(value as string | number | boolean | null));
       target.set('value', value);
@@ -186,7 +251,7 @@ export class JsonAstEditor {
     // The replacement is built from scratch, so keep the text that surrounds the old node:
     // the separator (scalars) or the trailing whitespace after the closing bracket
     // (containers). The leading part of a container prolog is its own opening bracket.
-    const replacement = buildValue(value, buildStyleFor(container, containerStyle(container)), target.pos());
+    const replacement = buildValue(value, buildStyleFor(parent, containerStyle(parent)), target.pos());
     const prefix = outsidePrefix(target);
     if (prefix !== '') {
       replacement.set('prolog', prefix + attribute(replacement, 'prolog'));
@@ -195,83 +260,48 @@ export class JsonAstEditor {
     if (suffix !== '') {
       replacement.set('epilog', attribute(replacement, 'epilog') + suffix);
     }
-
-    // An object member is a `member` node with the key and the value as children, so the
-    // value is replaced inside the member; an array element sits directly in the array.
-    if (container.type() === 'object') {
-      const member = container.child(slot.slotIndex);
-      if (member === null) {
-        throw new JsonAstPathError('the object member to replace has no node', path, segments.length - 1);
-      }
-      replaceChild(member, 1, replacement);
-      return;
-    }
-    replaceChild(container, slot.slotIndex, replacement);
+    replaceChild(holder, slotIndex, replacement);
   }
 
   /**
-   * Add a new value that must not exist yet.
+   * Append a value to the end of an existing array.
    *
-   * For an object the last segment is a new key and the member is appended after the
-   * existing members; an existing key is rejected because replacing it is `set`. For an
-   * array the last segment is an index in `0..length`, where `length` appends. The parent
-   * (`path` without the last segment) must exist and be an object or an array. Empty
-   * containers receive the value compactly, other containers follow their own indentation
-   * and separator style. Node positions are not recalculated: a built node carries the
-   * position of the receiving container.
+   * The path addresses the receiving array itself (for example `['tags']`), or it is empty
+   * when the root of the document is an array. The array must exist and intermediate
+   * segments are never created: a missing path, a scalar and an object are errors. The new
+   * element follows the formatting of the array: the indentation and the separators of a
+   * multiline array, `, ` in a single-line one, compact in an empty one and `\r\n` when the
+   * document uses CRLF. Node positions are not recalculated: the new node carries the
+   * position of the receiving array.
    *
-   * @param path - path of the new element: keys of the parent plus the new key or index
-   * @param value - JSON value to insert: string, finite number, boolean, `null`, an array or
+   * @param path - path of the existing array to append to; empty only for an array root
+   * @param value - JSON value to append: string, finite number, boolean, `null`, an array or
    * a plain object, nested values included
-   * @throws {JsonAstPathError} when the path is empty or invalid, the parent is missing or
-   * is a scalar, the object key already exists or the array index is out of range
+   * @throws {JsonAstPathError} when the path is invalid or does not exist, or addresses a
+   * scalar or an object instead of an array
    * @throws {Error} when the value is not a JSON value or contains a circular reference
    */
-  add(path: JsonAstPath, value: unknown): void {
+  push(path: JsonAstPath, value: unknown): void {
     const segments = validatePath(path);
-    assertMutationPath(segments, path);
     assertJsonValue(value);
-    const parent = resolveSegments(this._ast, segments.slice(0, -1), path).node;
-    const segmentIndex = segments.length - 1;
-    const segment = segments[segmentIndex];
-    const type = parent.type();
-
-    if (type === 'object') {
-      const key = segmentKey(segment);
-      if (findMemberIndex(parent, key) !== -1) {
-        throw new JsonAstPathError(
-          `key ${JSON.stringify(key)} already exists (use set to replace an existing value)`,
-          path,
-          segmentIndex,
-        );
+    let array: JsonAstNode;
+    if (segments.length === 0) {
+      const type = this._ast.type();
+      if (type !== 'array') {
+        throw new JsonAstPathError(`the document root is a value of type ${type} (push requires an array)`, path, null);
       }
-      const style = prepareContainerForInsert(parent);
-      const member = createMember(key, value, buildStyleFor(parent, style), keySeparator(parent), parent.pos());
-      insertIntoContainer(parent, parent.childs().length, member, style);
-      return;
-    }
-
-    if (type === 'array') {
-      const index = arrayIndex(segment, segmentIndex, path);
-      const length = parent.childs().length;
-      if (index > length) {
-        throw new JsonAstPathError(
-          `index ${index} is out of range for an array of length ${length} (allowed 0..${length})`,
-          path,
-          segmentIndex,
-        );
+      array = this._ast;
+    } else {
+      const node = resolveSegments(this._ast, segments, path).node;
+      const type = node.type();
+      if (type !== 'array') {
+        throw new JsonAstPathError(`the path addresses a value of type ${type} (push requires an array)`, path, segments.length - 1);
       }
-      const style = prepareContainerForInsert(parent);
-      const element = buildValue(value, buildStyleFor(parent, style), parent.pos());
-      insertIntoContainer(parent, index, element, style);
-      return;
+      array = node;
     }
-
-    throw new JsonAstPathError(
-      `the parent path addresses a ${type} value (only an object or an array can receive a new element)`,
-      path,
-      segmentIndex,
-    );
+    const style = prepareContainerForInsert(array);
+    const element = buildValue(value, buildStyleFor(array, style), array.pos());
+    appendChild(array, element, style);
   }
 
   /**

@@ -37,7 +37,7 @@ export function decodeValue(node: JsonAstNode): unknown {
 /**
  * Check that a value can be stored as JSON, recursing into arrays and plain objects.
  *
- * @param value - value passed to `set` or `add`
+ * @param value - value passed to `set` or `push`
  * @throws {Error} for `undefined`, a function, a symbol, a bigint, `NaN`, `Infinity`, a
  * non-plain object (a class instance, `Date`, `Map`, ...) or a circular reference; the
  * message names the offending location inside the value

@@ -170,26 +170,21 @@ export function prepareContainerForInsert(container: JsonAstNode): ContainerStyl
 }
 
 /**
- * Insert a detached node into a container and place the separator.
+ * Append a detached node to a container and place the separator.
  *
- * Appending puts the separator into the `epilog` of the previous child; inserting anywhere
- * else puts it into the `epilog` of the new child, so it separates the new node from the
- * following one.
+ * The separator goes into the `epilog` of the previous child, so the new child closes the
+ * container; an empty container receives its first child compactly. Only the end of a
+ * container is supported: the editor API no longer inserts into the middle.
  */
-export function insertIntoContainer(container: JsonAstNode, index: number, child: JsonAstNode, style: ContainerStyle): void {
+export function appendChild(container: JsonAstNode, child: JsonAstNode, style: ContainerStyle): void {
   const children = container.childs();
   if (children.length === 0) {
     insertChild(container, 0, child);
     return;
   }
-  if (index >= children.length) {
-    const previous = children[children.length - 1];
-    previous.set('epilog', attribute(previous, 'epilog') + style.separator);
-    insertChild(container, children.length, child);
-    return;
-  }
-  child.set('epilog', attribute(child, 'epilog') + style.separator);
-  insertChild(container, index, child);
+  const previous = children[children.length - 1];
+  previous.set('epilog', attribute(previous, 'epilog') + style.separator);
+  insertChild(container, children.length, child);
 }
 
 /**

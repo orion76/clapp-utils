@@ -92,7 +92,7 @@ export function resolveSlot(ast: JsonAstNode, path: JsonAstPath): Slot {
  * Resolve validated segments to the node and the slot that holds it.
  *
  * @param ast - root node
- * @param segments - validated segments to walk, a prefix of `path` for `add`
+ * @param segments - validated segments to walk, a prefix of `path` for `set`
  * @param path - path of the operation, used as is in the errors
  * @returns the addressed slot; for an empty segment list the root node with `container: null`
  * @throws {JsonAstPathError} when a key or an index is missing or the path runs through a

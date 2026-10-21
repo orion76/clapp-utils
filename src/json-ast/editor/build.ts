@@ -1,7 +1,7 @@
 /**
  * Building of detached nodes for new values.
  *
- * A value passed to `set` or `add` is turned into a subtree that follows the formatting
+ * A value passed to `set` or `push` is turned into a subtree that follows the formatting
  * context of the place it goes to; positions are taken from the anchor node, because the
  * editor never recalculates them.
  */
