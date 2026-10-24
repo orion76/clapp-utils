@@ -13,7 +13,7 @@ export async function loadFileContent(filePath: string): Promise<string> {
 export async function saveFileContent(filePath: string, fileContent: string): Promise<boolean> {
   try {
     await writeFile(filePath, fileContent, { encoding: 'utf8' });
-    return Promise.resolve(true);
+    return true;
   } catch (error) {
     console.error('Ошибка при чтении файла:', error);
     throw error;

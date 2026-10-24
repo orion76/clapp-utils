@@ -34,11 +34,11 @@ export abstract class FileBase implements IFileFormat {
 
   protected async load(update = false) {
     if (this.fileContent && !update) {
-      return Promise.resolve(true);
+      return true;
     }
     try {
       this.fileContent = await loadFileContent(this.filePath);
-      return Promise.resolve(true);
+      return true;
     } catch (error) {
       return Promise.reject(error);
     }

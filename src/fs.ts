@@ -19,15 +19,24 @@ export function isProjectRoot(dir: string): boolean {
   return fs.existsSync(path.join(dir, 'package.json'));
 }
 
-export function getProjectRoot(startFromDir: string, searchInDir = getUserProfileDirectory()): string | null {
+export function getProjectRoot(startFromDir: string, searchInDir: string): string | undefined {
   return findProjectRoot(startFromDir, searchInDir, isProjectRoot);
 }
+/**
+ * Resolves the root of the project the launcher runs in: the nearest directory
+ * with a `package.json` above the working directory. The lookup never throws —
+ * a working directory outside the searched tree or an absent project yields
+ * `null`, and the `project` source is then simply empty.
+ *
+ * @returns Root of the context project, or `null` when it is not found
+ */
+export function resolveProjectRoot(cwd: string, userHome: string): string | undefined {
+  try {
+    return getProjectRoot(cwd, userHome);
+  } catch {}
+}
 
-export function findProjectRoot(
-  startFromDir: string,
-  searchInDir: string,
-  checkFn: (dir: string) => boolean,
-): string | null {
+export function findProjectRoot(startFromDir: string, searchInDir: string, checkFn: (dir: string) => boolean): string | undefined {
   let currentDir: string = startFromDir;
 
   if (!currentDir.startsWith(searchInDir)) {
@@ -45,8 +54,6 @@ export function findProjectRoot(
   if (currentDir === searchInDir && checkFn(currentDir)) {
     return currentDir;
   }
-
-  return null;
 }
 export function isFileInside(file: string, parentDir: string): boolean {
   if (!fs.statSync(parentDir).isDirectory()) {
