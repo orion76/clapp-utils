@@ -5,9 +5,7 @@
  * operation fail, so a caller can point at the exact level instead of parsing the message.
  */
 
-import { JsonAstPath } from ".";
-import { TObjectPath } from "../../data-file/types";
-
+import type { JsonAstPath } from './types';
 
 /**
  * Failure of a path based read or edit of a JSON AST.
@@ -17,7 +15,7 @@ import { TObjectPath } from "../../data-file/types";
  */
 export class JsonAstPathError extends Error {
   /** Path the failed operation was called with (a copy, safe to keep). */
-  readonly path: TObjectPath;
+  readonly path: JsonAstPath;
 
   /**
    * Index of the failing segment inside {@link path}; `null` when the path itself is

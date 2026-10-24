@@ -6,6 +6,11 @@
  */
 import type { JsonAstNode } from '../types';
 
+/** One segment of a path into a JSON AST: an object key or an array index. */
+export type JsonAstPathSegment = string | number;
+
+/** Path into a JSON AST, one segment per nesting level. */
+export type JsonAstPath = JsonAstPathSegment[];
 
 /** Formatting of a container, taken from its own `prolog`/`epilog`. */
 export interface ContainerStyle {

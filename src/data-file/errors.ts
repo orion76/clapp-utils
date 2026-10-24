@@ -1,11 +1,11 @@
-import { TDataPath } from './types';
+import { TObjectPath } from './types';
 
 export class DataAccessError extends Error {
   readonly filePath: string;
 
-  readonly path?: TDataPath;
+  readonly path?: TObjectPath;
 
-  constructor(message: string, filePath: string, dataPath?: TDataPath) {
+  constructor(message: string, filePath: string, dataPath?: TObjectPath) {
     super(message);
     this.name = 'DataAccessError';
     this.filePath = filePath;
