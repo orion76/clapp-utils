@@ -7,8 +7,9 @@
   "author": "Paul Glazkow",
   "exports": {
     ".": {
-      "default": "./dist/clapp-utils.js",
-      "types": "./dist/clapp-utils.d.ts"
+      "development": "./src/public-api.ts",
+      "types": "./dist/clapp-utils.d.ts",
+      "default": "./dist/clapp-utils.js"
     }
   },
   "keywords": [
