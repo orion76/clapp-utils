@@ -1,14 +1,30 @@
+> ⚠️ **Work in progress.** This package is under active development. A release is expected soon, but it is **not production-ready** yet: the API may change without notice. Do not use it in production.
+
+> ⚠️ **В разработке.** Пакет ещё не готов к релизу: релиз ожидается в ближайшее время, API может меняться. Использовать в продакшне пока нельзя.
+
 # @clapp/utils
 
-[![npm version](https://img.shields.io/npm/v/@clapp/utils.svg)](https://www.npmjs.com/package/@clapp/utils)
+Shared helpers of the [`orion76/clapp`](https://github.com/orion76/clapp) monorepo: filesystem and project lookup, argument parsers, JSON/JSONC/YAML data files and a lossless JSON AST. The package ships no CLI: every helper is a plain function exported from the package root.
 
-Shared helpers for the `clapp` packages: filesystem and project lookup, argument parsers, JSON/YAML data files and a lossless JSON AST.
+## Features
+
+- **Filesystem and project lookup** — `findProjectRoot`, `getProjectRoot`, `resolveProjectRoot`, `isProjectRoot`, `isFileInside`, `getCwd`, `getUserProfileDirectory`.
+- **`package.json` access** — `loadPackageJson` reads and types the `package.json` of a given project root.
+- **Argument parsers** — `parseDateString` plus the `TArgumentParseFunc` type for a commander `parseArg` callback.
+- **Data files** — `readValue`, `writeValue`, `addValue`, `deleteValue` addressed by a key/index path, over JSON, JSONC and YAML; the format is detected by the extension and comments and field order survive a round trip.
+- **Lossless JSON AST** — `JsonAst.parse` / `JsonAst.unparse` keep every byte of the source text, including whitespace, key order, number spelling and string escaping.
+- **Path based AST editing** — `JsonAstEditor` (`node`, `has`, `get`, `set`, `push`, `delete`) edits a parsed document in place and imitates the style of the container it writes into.
+- **Type guards** — `isString`.
 
 ## Installation
+
+The package is not published to npm yet, so `npm install @clapp/utils` does not resolve until the first release. Until then it is consumed as a workspace package of the monorepo:
 
 ```bash
 npm install @clapp/utils
 ```
+
+## Usage
 
 Every helper is re-exported from the package root.
 
@@ -16,7 +32,7 @@ Every helper is re-exported from the package root.
 import { JsonAst, findProjectRoot, readValue } from '@clapp/utils';
 ```
 
-## Contents
+### Modules
 
 | Module       | What it provides                                                                      |
 | ------------ | ------------------------------------------------------------------------------------- |
@@ -28,7 +44,7 @@ import { JsonAst, findProjectRoot, readValue } from '@clapp/utils';
 
 ### Data files (`data-file`)
 
-`data-file` reads and writes JSON, JSONC and YAML documents by path. The path is an array of object keys and array indexes (`TDataPath`), for example `['scripts', 'build']`. The backend is selected by the file extension: `.json`/`.jsonc` use `jsonc-parser` and keep comments and trailing commas, `.yaml`/`.yml` use the `yaml` package and keep comments and field order.
+`data-file` reads and writes JSON, JSONC and YAML documents by path. The path is an array of object keys and array indexes (`TObjectPath`), for example `['scripts', 'build']`. The backend is selected by the file extension: `.json`/`.jsonc` use `jsonc-parser` and keep comments and trailing commas, `.yaml`/`.yml` use the `yaml` package and keep comments and field order.
 
 ```ts
 import { readValue, writeValue, addValue } from '@clapp/utils';
@@ -38,11 +54,11 @@ writeValue('package.json', ['version'], '1.0.0');
 addValue('clapp.config.yml', ['plugins', 'PLUGIN_COMMAND'], { patterns: ['commands/**/*.plugin.{js,ts}'] });
 ```
 
-## Lossless JSON AST (`json-ast`)
+### Lossless JSON AST (`json-ast`)
 
 `json-ast` parses strict JSON into a tree that keeps the original text of the document and writes it back unchanged. It is meant for editing JSON while preserving formatting: it is not wired into `data-file` yet.
 
-### Public API
+#### Public API
 
 ```ts
 import { JsonAst, JsonAstEditor, JsonAstPathError } from '@clapp/utils';
@@ -63,7 +79,7 @@ const text: string = JsonAst.unparse(ast);
 
 The module is exported from the package root (`packages/utils/src/index.ts:7`) through `packages/utils/src/json-ast/index.ts`, which re-exports `json-ast.ts`, `types.ts` and the `editor/` folder. The parser factory `parseJsonAst`, the node factory `createNode` and the editor helpers (`path.ts`, `value.ts`, `build.ts`, `format.ts`) are internal and stay out of the package API.
 
-### Node model
+#### Node model
 
 A node stores the raw source text in its attributes and the decoded JavaScript value separately:
 
@@ -88,7 +104,7 @@ The root of the tree is a single value node. Whitespace before the document is p
 
 `unparse` walks the tree with `ast.walk(callback, 'both')` and concatenates `prolog`, then `body` (or `JSON.stringify(value)` when a node has no body), then `epilog` (`packages/utils/src/json-ast/json-ast.ts:63`). Because every byte of the source sits in one of these attributes, the output is identical to the input.
 
-### Round-trip guarantees
+#### Round-trip guarantees
 
 `JsonAst.unparse(JsonAst.parse(x)) === x` byte for byte, including:
 
@@ -120,7 +136,7 @@ ast.walk((node) => {
 JsonAst.unparse(ast); // same document, only `1` is replaced with `2`
 ```
 
-### Navigation and traversal
+#### Navigation and traversal
 
 - `type(): string` — node type.
 - `attrs(): string[]` — names of all attributes.
@@ -151,7 +167,7 @@ root.walk((node, depth, parent, when) => {
 }, 'both');
 ```
 
-### Path based editing (`JsonAstEditor`)
+#### Path based editing (`JsonAstEditor`)
 
 `JsonAstEditor` reads and edits a parsed document by path. Create one editor over a tree produced by `JsonAst.parse` and call its instance methods: every method works on that tree in place, so the editor holds no other state and `JsonAst.unparse(ast)` renders the result after each change. There are no static methods.
 
@@ -185,7 +201,7 @@ Every untouched byte of the document stays intact. New text follows the style of
 
 Path failures throw `JsonAstPathError` with the whole `path` and the `segmentIndex` of the failing segment (`null` when the path itself is invalid). Values that are not JSON (`undefined`, a function, a symbol, a bigint, `NaN`, `Infinity`, a non-plain object) and circular references throw a plain `Error` before the tree is touched.
 
-### Errors
+#### Errors
 
 - `parse` throws `Error` when the argument is not a string (`invalid JSON argument (expected type string)`) and on invalid JSON. A syntax error message starts with `parse: JSON parsing failure:`, carries `line`, `column` and `offset`, and includes the offending source line with a caret under the offending character (`packages/utils/src/json-ast/parse.ts:54`).
 - `unparse` throws `Error` when the argument is not an AST node (`generate: invalid AST argument (expected type object)`).
@@ -211,14 +227,14 @@ try {
 }
 ```
 
-### Boundaries
+#### Boundaries
 
 - The grammar is strict JSON: no comments and no trailing commas. JSONC remains the job of `jsonc-parser` in `data-file` (`packages/utils/src/data-file/formats/json/json.ts:11`).
 - There is no `dump`, no coloured output, no CLI/`bin` and no AST query language. Structural edits are limited to one existing or new value at a time through `JsonAstEditor` (`set`/`push`/`delete`): no moves or copies between documents, no bulk edits, no patch/diff.
 - The parser is an independent recursive descent implementation (`packages/utils/src/json-ast/parse.ts:78`). It uses no PEG/ASTy tooling and adds no dependencies: the runtime dependencies are still `jsonc-parser`, `object-path` and `yaml` (plus the `@orion76/logger` peer).
 - The lossless attribute model is inspired by [json-asty](https://github.com/rse/json-asty) 1.3.4 (MIT, Copyright © 2018-2026 Dr. Ralf S. Engelschall); the code is an independent implementation. The attribution is repeated in the module headers (`packages/utils/src/json-ast/json-ast.ts:10`, `parse.ts:5`, `node.ts:4`, `types.ts:4`).
 
-### Verification
+#### Verification
 
 ```bash
 npm run test:jest -w @clapp/utils -- json-ast
@@ -227,6 +243,20 @@ npm run build:utils
 ```
 
 The `json-ast` suites are `packages/utils/tests/json-ast.test.ts` (round-trip, the AST shape, the `childs`/`child` contract and parse errors) and `packages/utils/tests/json-ast-editor.test.ts` (reads, `set`/`push`/`delete`, formatting, CRLF, error paths and invariants). The other `data-*` suites are currently red for a pre-existing reason after the `data-file/formats/**` refactor (tracked separately); a full package run is not green until that is fixed.
+
+## Related packages
+
+| Package                                                                     | Repository                                                                               |
+| --------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| [`@clapp/common`](https://www.npmjs.com/package/@clapp/common)               | [`orion76/clapp-common`](https://github.com/orion76/clapp-common)                         |
+| [`@clapp/core`](https://www.npmjs.com/package/@clapp/core)                   | [`orion76/clapp-core`](https://github.com/orion76/clapp-core)                             |
+| [`@clapp/ai-workflow-plugins`](https://www.npmjs.com/package/@clapp/ai-workflow-plugins) | [`orion76/clapp-ai-workflow-plugins`](https://github.com/orion76/clapp-ai-workflow-plugins) |
+| [`@clapp/ai-workflow-cli`](https://www.npmjs.com/package/@clapp/ai-workflow-cli) | [`orion76/clapp-ai-workflow-cli`](https://github.com/orion76/clapp-ai-workflow-cli)       |
+| [`@clapp/ai-workflow-mcp`](https://www.npmjs.com/package/@clapp/ai-workflow-mcp) | [`orion76/clapp-ai-workflow-mcp`](https://github.com/orion76/clapp-ai-workflow-mcp)       |
+
+## Русский
+
+`@clapp/utils` — набор служебных помощников для остальных пакетов: поиск корня проекта по `package.json`, чтение `package.json`, разбор аргументов, работа с файлами данных и lossless-AST для JSON. `data-file/` читает и пишет JSON, JSONC и YAML по пути из ключей и индексов, сохраняя комментарии и порядок полей. `json-ast/` разбирает строгий JSON в дерево, которое выгружается обратно байт в байт, и позволяет править документ по пути без переформатирования. Пакет находится в активной разработке и ещё не опубликован в npm. Релиз ожидается в ближайшее время, но API может меняться без предупреждения. Использовать в продакшне пока нельзя.
 
 ## License
 
