@@ -2,6 +2,8 @@
 
 > ⚠️ **В разработке.** Пакет ещё не готов к релизу: релиз ожидается в ближайшее время, API может меняться. Использовать в продакшне пока нельзя.
 
+**English** | [Русский](./docs/ru/README.md)
+
 # @clapp/utils
 
 Shared helpers of the [`orion76/clapp`](https://github.com/orion76/clapp) monorepo: filesystem and project lookup, argument parsers, JSON/JSONC/YAML data files and a lossless JSON AST. The package ships no CLI: every helper is a plain function exported from the package root.
@@ -253,10 +255,6 @@ The `json-ast` suites are `packages/utils/tests/json-ast.test.ts` (round-trip, t
 | [`@clapp/ai-workflow-plugins`](https://www.npmjs.com/package/@clapp/ai-workflow-plugins) | [`orion76/clapp-ai-workflow-plugins`](https://github.com/orion76/clapp-ai-workflow-plugins) |
 | [`@clapp/ai-workflow-cli`](https://www.npmjs.com/package/@clapp/ai-workflow-cli) | [`orion76/clapp-ai-workflow-cli`](https://github.com/orion76/clapp-ai-workflow-cli)       |
 | [`@clapp/ai-workflow-mcp`](https://www.npmjs.com/package/@clapp/ai-workflow-mcp) | [`orion76/clapp-ai-workflow-mcp`](https://github.com/orion76/clapp-ai-workflow-mcp)       |
-
-## Русский
-
-`@clapp/utils` — набор служебных помощников для остальных пакетов: поиск корня проекта по `package.json`, чтение `package.json`, разбор аргументов, работа с файлами данных и lossless-AST для JSON. `data-file/` читает и пишет JSON, JSONC и YAML по пути из ключей и индексов, сохраняя комментарии и порядок полей. `json-ast/` разбирает строгий JSON в дерево, которое выгружается обратно байт в байт, и позволяет править документ по пути без переформатирования. Пакет находится в активной разработке и ещё не опубликован в npm. Релиз ожидается в ближайшее время, но API может меняться без предупреждения. Использовать в продакшне пока нельзя.
 
 ## License
 
