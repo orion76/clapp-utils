@@ -33,7 +33,7 @@
     "pack": "npm pack",
     "prepublishOnly": "npm run build",
     "test": "echo tests for clapp utils!",
-    "test:jest": "nx jest:test",
+    "test:jest": "jest",
     "install-libs": "./scripts/install.sh"
   },
   "peerDependencies": {
