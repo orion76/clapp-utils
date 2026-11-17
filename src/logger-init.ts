@@ -5,6 +5,7 @@ type ULoggerNames = 'clapp_utils';
 const clappConfig: ILoggerConfig<UConsoleLevels>[] = [
   {
 
+    name: 'clapp_utils',
     enabled: false,
     levels: ['log', 'debug', 'error', 'info', 'warn'],
     enabledLevels: ['log', 'debug', 'error', 'info', 'warn'],
