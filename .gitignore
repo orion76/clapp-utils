@@ -12,6 +12,7 @@ build/
 
 # Temporary files
 .tmp/
+.tmp-*/
 .temp/
 tmp/
 *.log
@@ -25,3 +26,4 @@ tmp/
 *.swp
 *~
 .DS_Store
+.history/

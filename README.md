@@ -6,7 +6,9 @@
 
 # @clapp/utils
 
-Shared helpers of the [`orion76/clapp`](https://github.com/orion76/clapp) monorepo: filesystem and project lookup, argument parsers, JSON/JSONC/YAML data files and a lossless JSON AST. The package ships no CLI: every helper is a plain function exported from the package root.
+The package is published from its own repository, [`orion76/clapp-utils`](https://github.com/orion76/clapp-utils); it is developed together with the `clapp` host and its dev sample app ([`orion76/clapp`](https://github.com/orion76/clapp)).
+
+Shared helpers of the `clapp` CLI framework: filesystem and project lookup, argument parsers, JSON/JSONC/YAML data files and a lossless JSON AST. The package ships no CLI: every helper is a plain function exported from the package root.
 
 ## Features
 
@@ -20,7 +22,7 @@ Shared helpers of the [`orion76/clapp`](https://github.com/orion76/clapp) monore
 
 ## Installation
 
-The package is not published to npm yet, so `npm install @clapp/utils` does not resolve until the first release. Until then it is consumed as a workspace package of the monorepo:
+The package is not published to npm yet, so `npm install @clapp/utils` does not resolve until the first release. Until then it is consumed as a workspace package of the `clapp` host workspace ([`orion76/clapp`](https://github.com/orion76/clapp)):
 
 ```bash
 npm install @clapp/utils

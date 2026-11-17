@@ -37,7 +37,7 @@
     "install-libs": "./scripts/install.sh"
   },
   "peerDependencies": {
-    "@orion76/logger": "workspace:*"
+    "@orion76/logger": "link:../../../@orion76/projects/logger"
   },
   "dependencies": {
     "object-path": "^0.11.8",
