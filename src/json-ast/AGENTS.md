@@ -174,7 +174,7 @@ place, текст получают обычным `JsonAst.unparse`.
 ## Проверки
 
 ```bash
-npm run test:jest -w @clapp/utils -- json-ast
+cd packages/utils && npm run test:jest -- json-ast
 npx tsc --noEmit -p packages/utils/tsconfig.tests.json
 npm run build:utils
 ```

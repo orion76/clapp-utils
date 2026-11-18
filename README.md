@@ -55,7 +55,9 @@ import { readValue, writeValue, addValue } from '@clapp/utils';
 
 readValue('package.json', ['version']);
 writeValue('package.json', ['version'], '1.0.0');
-addValue('clapp.config.yml', ['plugins', 'PLUGIN_COMMAND'], { patterns: ['commands/**/*.plugin.{js,ts}'] });
+addValue('clapp.config.yml', ['plugins', 'command'], {
+  sources: [{ type: 'project', patterns: ['plugins/command/**/*.plugin.{js,ts}'] }],
+});
 ```
 
 ### Lossless JSON AST (`json-ast`)
@@ -241,7 +243,7 @@ try {
 #### Verification
 
 ```bash
-npm run test:jest -w @clapp/utils -- json-ast
+cd packages/utils && npm run test:jest -- json-ast
 npx tsc --noEmit -p packages/utils/tsconfig.tests.json
 npm run build:utils
 ```
